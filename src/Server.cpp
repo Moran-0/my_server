@@ -4,6 +4,8 @@
 #include "InetAddress.h"
 #include "Channel.h"
 #include "Acceptor.h"
+#include "Connection.h"
+
 #include <iostream>
 #include <fcntl.h>
 #include <errno.h>
@@ -15,16 +17,6 @@ using std::cout;
 using std::endl;
 Server::Server(EventLoop *_loop) : loop(_loop)
 {
-    // Socket *serv_sock = new Socket();
-    // InetAddress serv_addr("127.0.0.1", 8888);
-    // serv_sock->bind(serv_addr);
-    // serv_sock->setNonBlocking();
-    // serv_sock->listen();
-
-    // Channel *serv_channel = new Channel(loop, serv_sock->getFd()); // 为服务器创建监听channel
-    // std::function<void()> cb = std::bind(&Server::newConnection, this, serv_sock);
-    // serv_channel->setCallback(cb);
-    // serv_channel->EnableReading(); // 注册并监听可读事件
     acceptor = new Acceptor(loop);
     acceptor->setNewConnectionCallback(std::bind(&Server::newConnection, this, std::placeholders::_1));
     cout << "Server " << " Start!" << endl;
@@ -36,46 +28,17 @@ Server::~Server()
     acceptor = nullptr;
 }
 
-void Server::handReadEvent(int sockfd)
+void Server::deleteConnection(Socket *_sock)
 {
-    char buf[READ_BUFFER];
-    while (true)
-    {
-        int byte_read = read(sockfd, buf, READ_BUFFER);
-        if (byte_read > 0)
-        {
-            cout << "Get messages from " << sockfd << ":" << buf << endl;
-            write(sockfd, buf, sizeof(buf));
-        }
-        else if (byte_read == -1 && errno == EINTR)
-        {
-            // 客户端正常中断
-            cout << "contineu reading..." << endl;
-            continue;
-        }
-        else if (byte_read == -1 && ((errno == EAGAIN) || (errno == EWOULDBLOCK)))
-        {
-            // 非阻塞IO表示数据全部读取完毕
-            cout << "Finish reading once" << endl;
-            break;
-        }
-        else if (byte_read == 0)
-        {
-            cout << "EOF, client " << sockfd << " disconnected!" << endl;
-            close(sockfd);
-            break;
-        }
-    }
+    auto connect = connections[_sock->getFd()];
+    connections.erase(_sock->getFd());
+    delete connect;
+    connect = nullptr;
 }
 
-void Server::newConnection(Socket *serv_sk)
+void Server::newConnection(Socket *sk)
 {
-    InetAddress *clnt_addr = new InetAddress();
-    Socket *clnt_sock = new Socket(serv_sk->accept(clnt_addr));
-    cout << "Connect to client " << clnt_sock->getFd() << "IP:" << inet_ntoa(clnt_addr->addr.sin_addr) << " PORT:" << clnt_addr->addr.sin_port << endl;
-    std::function<void()> cb = std::bind(&Server::handReadEvent, this, clnt_sock->getFd());
-    clnt_sock->setNonBlocking();
-    Channel *clnt_ch = new Channel(loop, clnt_sock->getFd());
-    clnt_ch->setCallback(cb);
-    clnt_ch->EnableReading();
+    Connection *connect = new Connection(loop, sk); // 内存由deleteConnection函数进行释放（通过Connection对象进行回调）
+    connect->setDelteConnectionCallback(std::bind(&Server::deleteConnection, this, std::placeholders::_1));
+    connections[sk->getFd()] = connect;
 }
