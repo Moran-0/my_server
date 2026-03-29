@@ -1,0 +1,18 @@
+UDP网络编程常用函数详细介绍
+以下是对UDP编程中常用函数的详细说明，基于C/C++的Berkeley套接字API（POSIX标准）。这些函数主要用于Linux/Unix环境，头文件通常包括<sys/socket.h>、<netinet/in.h>等。UDP是无连接协议，因此通信简单但不保证可靠性。
+1. socket()
+原型：int socket(int domain, int type, int protocol);
+参数：
+domain：协议族，通常为AF_INET（IPv4）。
+type：套接字类型，UDP用SOCK_DGRAM。
+protocol：协议，通常为IPPROTO_UDP（或0，让系统自动选择）。
+返回值：成功返回套接字描述符（非负整数），失败返回-1并设置errno。
+用途：创建UDP套接字，用于后续网络操作。是UDP通信的起点。
+示例：int sockfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+2. bind()
+原型：int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+参数：
+sockfd：socket()返回的套接字描述符。
+addr：指向sockaddr_in结构的指针，包含IP地址和端口
+alsd;kjf;lasdkjfa;lsdkjfas;ldkfjas;ldkfjas;lkfjas;ldkfjasasd;jlfkjasd;flkjasd;lfkjas;ldkfja;slkdf
+a;sldkfjal;skdjfa;lskdjfalk;sdfjiowemlaiskdjfekjaosdkjfioeqrjlk;asdjfioeqrjalks;dfjieoja;sldkfjieja;sdlkf\

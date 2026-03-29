@@ -3,31 +3,37 @@
 #include "EventLoop.h"
 #include "InetAddress.h"
 #include "Channel.h"
+#include "Acceptor.h"
 #include <iostream>
 #include <fcntl.h>
 #include <errno.h>
 #include <unistd.h>
+#include <functional>
 
 #define READ_BUFFER 1024
 using std::cout;
 using std::endl;
 Server::Server(EventLoop *_loop) : loop(_loop)
 {
-    Socket *serv_sock = new Socket();
-    InetAddress serv_addr("127.0.0.1", 8888);
-    serv_sock->bind(serv_addr);
-    serv_sock->setNonBlocking();
-    serv_sock->listen();
+    // Socket *serv_sock = new Socket();
+    // InetAddress serv_addr("127.0.0.1", 8888);
+    // serv_sock->bind(serv_addr);
+    // serv_sock->setNonBlocking();
+    // serv_sock->listen();
 
-    Channel *serv_channel = new Channel(loop, serv_sock->getFd()); // 为服务器创建监听channel
-    std::function<void()> cb = std::bind(&Server::newConnection, this, serv_sock);
-    serv_channel->setCallback(cb);
-    serv_channel->EnableReading(); // 注册并监听可读事件
-    cout << "Server " << serv_sock->getFd() << " Start!" << endl;
+    // Channel *serv_channel = new Channel(loop, serv_sock->getFd()); // 为服务器创建监听channel
+    // std::function<void()> cb = std::bind(&Server::newConnection, this, serv_sock);
+    // serv_channel->setCallback(cb);
+    // serv_channel->EnableReading(); // 注册并监听可读事件
+    acceptor = new Acceptor(loop);
+    acceptor->setNewConnectionCallback(std::bind(&Server::newConnection, this, std::placeholders::_1));
+    cout << "Server " << " Start!" << endl;
 }
 
 Server::~Server()
 {
+    delete acceptor;
+    acceptor = nullptr;
 }
 
 void Server::handReadEvent(int sockfd)
