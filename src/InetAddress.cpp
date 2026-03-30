@@ -16,3 +16,13 @@ InetAddress::InetAddress(const char *ip, uint16_t port) : addr_len(sizeof(addr))
     inet_pton(AF_INET, ip, &addr.sin_addr);
     addr_len = sizeof(addr);
 }
+
+sockaddr_in InetAddress::getAddr() const
+{
+    return addr;
+}
+
+socklen_t InetAddress::getAddrLen() const
+{
+    return addr_len;
+}

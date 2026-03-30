@@ -23,7 +23,8 @@ Socket::~Socket()
 }
 void Socket::bind(const InetAddress &addr)
 {
-    errif(::bind(sockfd, (sockaddr *)&addr.addr, addr.addr_len) == -1, "Failed to bind socket");
+    auto sock_addr = addr.getAddr();
+    errif(::bind(sockfd, (sockaddr *)&sock_addr, addr.getAddrLen()) == -1, "Failed to bind socket");
 }
 void Socket::listen()
 {
@@ -36,7 +37,15 @@ void Socket::setNonBlocking()
 }
 int Socket::accept(InetAddress *addr)
 {
-    int client_fd = ::accept(sockfd, (sockaddr *)&addr->addr, &addr->addr_len);
+    auto sock_addr = addr->getAddr();
+    auto addr_len = addr->getAddrLen();
+    int client_fd = ::accept(sockfd, (sockaddr *)&sock_addr, &addr_len);
     errif(client_fd == -1, "Failed to accept connection");
     return client_fd;
+}
+
+void Socket::connect(const InetAddress &addr)
+{
+    auto sock_addr = addr.getAddr();
+    errif(::connect(sockfd, (sockaddr *)&sock_addr, addr.getAddrLen()) == -1, "connect failed!");
 }

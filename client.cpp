@@ -4,50 +4,55 @@
 #include <string.h>
 #include <unistd.h>
 #include "src/Util.h"
+#include "src/Socket.h"
+#include "src/InetAddress.h"
+#include "src/Buffer.h"
 
 #define BUFFER_SIZE 1024
+using std::cout;
+using std::endl;
 
 int main()
 {
-    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    errif(sockfd == -1, "socket create error");
-
-    struct sockaddr_in serv_addr;
-    bzero(&serv_addr, sizeof(serv_addr));
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    serv_addr.sin_port = htons(8888);
-
-    errif(connect(sockfd, (sockaddr *)&serv_addr, sizeof(serv_addr)) == -1, "socket connect error");
+    Socket clnt_sock;
+    InetAddress serv_addr("127.0.0.1", 8888);
+    clnt_sock.connect(serv_addr);
 
     while (true)
     {
-        char buf[BUFFER_SIZE]; // 在这个版本，buf大小必须大于或等于服务器端buf大小，不然会出错，想想为什么？
-        bzero(&buf, sizeof(buf));
-        scanf("%s", buf);
-        ssize_t write_bytes = write(sockfd, buf, sizeof(buf));
+        Buffer sendBuffer, readBuffer;
+        sendBuffer.getline();
+        size_t write_bytes = write(clnt_sock.getFd(), sendBuffer.c_str(), sendBuffer.size());
         if (write_bytes == -1)
         {
             printf("socket already disconnected, can't write any more!\n");
             break;
         }
-        bzero(&buf, sizeof(buf));
-        ssize_t read_bytes = read(sockfd, buf, sizeof(buf));
-        if (read_bytes > 0)
+        // sendBuffer.clear();
+        char buf[BUFFER_SIZE];
+        while (true)
         {
-            printf("message from server: %s\n", buf);
+            size_t read_bytes = read(clnt_sock.getFd(), buf, sizeof(buf));
+            if (read_bytes > 0)
+            {
+                readBuffer.append(buf, read_bytes);
+            }
+            else if (read_bytes == 0)
+            {
+                printf("server socket disconnected!\n");
+                exit(EXIT_SUCCESS);
+            }
+            else if (read_bytes == -1)
+            {
+                errif(true, "socket read error");
+            }
+            if (readBuffer.size() >= sendBuffer.size())
+            {
+                cout << "message from server: " << readBuffer.c_str() << endl;
+                break;
+            }
         }
-        else if (read_bytes == 0)
-        {
-            printf("server socket disconnected!\n");
-            break;
-        }
-        else if (read_bytes == -1)
-        {
-            close(sockfd);
-            errif(true, "socket read error");
-        }
+        readBuffer.clear();
     }
-    close(sockfd);
     return 0;
 }

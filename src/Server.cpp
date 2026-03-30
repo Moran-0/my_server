@@ -4,6 +4,7 @@
 #include "InetAddress.h"
 #include "Channel.h"
 #include "Acceptor.h"
+#include "Buffer.h"
 #include "Connection.h"
 
 #include <iostream>
