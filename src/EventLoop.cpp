@@ -1,10 +1,12 @@
 #include "EventLoop.h"
 #include "Epoll.h"
 #include "Channel.h"
+#include "ThreadPool.h"
 
 EventLoop::EventLoop() : ep(nullptr), quit(false)
 {
     ep = new Epoll();
+    thread_pool = new ThreadPool();
 }
 
 EventLoop::~EventLoop()
@@ -20,7 +22,7 @@ void EventLoop::loop()
         auto chs = ep->poll();
         for (const auto ch : chs)
         {
-            ch->handleEvent();
+            thread_pool->addTask(std::bind(&Channel::handleEvent, ch));
         }
     }
 }
