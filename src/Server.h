@@ -1,4 +1,6 @@
 #pragma once
+#include <memory>
+#include <mutex>
 #include <unordered_map>
 class EventLoop;
 class Socket;
@@ -9,11 +11,12 @@ class Server
 private:
     EventLoop *loop;
     Acceptor *acceptor;
-    std::unordered_map<int, Connection *> connections;
+    std::unordered_map<int, std::shared_ptr<Connection>> connections;
+    std::mutex connections_mtx;
 
 public:
     Server(EventLoop *_loop);
     ~Server();
-    void deleteConnection(Socket *_sock);
+    void deleteConnection(int fd);
     void newConnection(Socket *sk);
 };

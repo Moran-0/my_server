@@ -6,6 +6,7 @@
 
 #include <iostream>
 #include <string.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 using std::cout;
@@ -17,21 +18,38 @@ Connection::Connection(EventLoop *_loop, Socket *_sock) : loop(_loop), sock(_soc
 {
     sock->setNonBlocking();
     clnt_ch = new Channel(loop, sock->getFd());
-    std::function<void()> cb = std::bind(&Connection::echo, this, sock->getFd());
-    clnt_ch->setCallback(cb);
-    clnt_ch->EnableReading();
-    buffer = new Buffer();
+    readBuffer = new Buffer();
 }
 
 Connection::~Connection()
 {
+    delete readBuffer;
+    readBuffer = nullptr;
     delete clnt_ch;
     clnt_ch = nullptr;
     delete sock;
     sock = nullptr;
 }
 
-void Connection::echo(int sockfd)
+void Connection::registerChannel()
+{
+    int sockfd = sock->getFd();
+    std::weak_ptr<Connection> weak_self = weak_from_this();
+    clnt_ch->setReadCallback([weak_self, sockfd]()
+                             {
+                                 auto self = weak_self.lock();
+                                 if (!self)
+                                 {
+                                     return;
+                                 }
+                                 if (self->echo(sockfd))
+                                 {
+                                     self->deleteConnectionCallback(sockfd);
+                                 } });
+    clnt_ch->enableRead();
+}
+
+bool Connection::echo(int sockfd)
 {
     char buf[READ_BUFFER];
     while (true)
@@ -42,7 +60,7 @@ void Connection::echo(int sockfd)
         if (byte_read > 0)
         {
             cout << "Get messages from " << sockfd << ":" << buf << endl;
-            buffer->append(buf, byte_read);
+            readBuffer->append(buf, byte_read);
             // write(sockfd, buf, sizeof(buf));
         }
         else if (byte_read == -1 && errno == EINTR)
@@ -55,20 +73,53 @@ void Connection::echo(int sockfd)
         {
             // 非阻塞IO表示数据全部读取完毕
             cout << "Finish reading once" << endl;
-            write(sockfd, buffer->c_str(), buffer->size());
-            buffer->clear();
+            if (!send(sockfd))
+            {
+                clnt_ch->disableAll();
+                loop->removeChannel(clnt_ch);
+                return true;
+            }
+            readBuffer->clear();
             break;
         }
         else if (byte_read == 0)
         {
             cout << "EOF, client " << sockfd << " disconnected!" << endl;
-            deleteConnectionCallback(sock); // 回调函数关闭连接
-            break;
+            clnt_ch->disableAll();
+            loop->removeChannel(clnt_ch);
+            return true;
         }
     }
+    return false;
 }
 
-void Connection::setDelteConnectionCallback(std::function<void(Socket *)> cb)
+void Connection::setDeleteConnectionCallback(std::function<void(int)> cb)
 {
     deleteConnectionCallback = cb;
+}
+
+bool Connection::send(int sockfd)
+{
+    const char *buf = readBuffer->c_str();
+    int data_size = static_cast<int>(readBuffer->size());
+    int data_left = data_size;
+    while (data_left > 0)
+    {
+        ssize_t bytes_write = ::send(sockfd, buf + data_size - data_left, data_left, MSG_NOSIGNAL);
+        if (bytes_write > 0)
+        {
+            data_left -= static_cast<int>(bytes_write);
+            continue;
+        }
+        if (bytes_write == -1 && errno == EINTR)
+        {
+            continue;
+        }
+        if (bytes_write == -1 && (errno == EAGAIN || errno == EWOULDBLOCK))
+        {
+            break;
+        }
+        return false;
+    }
+    return true;
 }

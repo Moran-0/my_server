@@ -1,7 +1,7 @@
 #include "Channel.h"
 #include "EventLoop.h"
 
-Channel::Channel(EventLoop *_loop, int _fd) : loop(_loop), fd(_fd), events(0), revents(0), inEpoll(false)
+Channel::Channel(EventLoop *_loop, int _fd) : loop(_loop), fd(_fd), events(0), inEpoll(false), useThreadPool(true), handling(false)
 {
 }
 
@@ -9,14 +9,38 @@ Channel::~Channel()
 {
 }
 
-void Channel::handleEvent()
+void Channel::handleEvent(uint32_t ready)
 {
-    callback();
+    if (ready & (EPOLLIN | EPOLLPRI))
+    {
+        if (readCallback)
+        {
+            readCallback();
+        }
+    }
+    if (ready & EPOLLOUT)
+    {
+        if (writeCallback)
+        {
+            writeCallback();
+        }
+    }
 }
 
-void Channel::EnableReading()
+void Channel::enableRead()
 {
-    events = EPOLLIN | EPOLLET;
+    events |= EPOLLIN | EPOLLPRI; // 可读事件以及紧急数据可读事件
+    loop->updateChannel(this);
+}
+
+void Channel::disableAll()
+{
+    events = 0;
+}
+/// @brief 启用边缘触发模式
+void Channel::useET()
+{
+    events |= EPOLLET;
     loop->updateChannel(this);
 }
 
@@ -25,27 +49,33 @@ uint32_t Channel::getEvents()
     return events;
 }
 
-uint32_t Channel::getREvents()
-{
-    return revents;
-}
-
 bool Channel::getInEpoll()
 {
     return inEpoll;
 }
 
-void Channel::setInEpoll()
+void Channel::setInEpoll(bool _in)
 {
-    inEpoll = true;
+    inEpoll = _in;
 }
 
-void Channel::setRevents(uint32_t rev)
+void Channel::setReadCallback(std::function<void()> cb)
 {
-    revents = rev;
+    readCallback = cb;
 }
 
-void Channel::setCallback(std::function<void()> cb)
+void Channel::setUseThreadPool(bool _useInfo)
 {
-    callback = cb;
+    useThreadPool = _useInfo;
+}
+
+bool Channel::tryStartHandling()
+{
+    bool expected = false;
+    return handling.compare_exchange_strong(expected, true);
+}
+
+void Channel::finishHandling()
+{
+    handling.store(false);
 }

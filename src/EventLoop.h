@@ -15,4 +15,5 @@ public:
     ~EventLoop();
     void loop();
     void updateChannel(Channel *ch);
+    void removeChannel(Channel *ch);
 };

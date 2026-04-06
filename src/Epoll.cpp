@@ -47,17 +47,28 @@ int Epoll::wait(std::vector<epoll_event> &events, int timeout)
 //     return triggered_events;
 // }
 
-std::vector<Channel *> Epoll::poll(int timeout)
+std::vector<Epoll::ChannelEvent> Epoll::poll(int timeout)
 {
-    std::vector<Channel *> channels;
+    std::vector<ChannelEvent> channels;
     int nfds = wait(events, timeout);
     for (int i = 0; i < nfds; ++i)
     {
         auto ch = static_cast<Channel *>(events.at(i).data.ptr);
-        ch->setRevents(events.at(i).events);
-        channels.push_back(ch);
+        uint32_t ready = events.at(i).events;
+        channels.emplace_back(ch, ready);
     }
     return channels;
+}
+
+void Epoll::remove(Channel *channel)
+{
+    if (channel == nullptr || !channel->getInEpoll())
+    {
+        return;
+    }
+    int fd = channel->getFd();
+    errif(epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr) == -1, "epoll_ctl delete failed!");
+    channel->setInEpoll(false);
 }
 
 void Epoll::updateChannel(Channel *channel)

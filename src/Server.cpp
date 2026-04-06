@@ -29,17 +29,17 @@ Server::~Server()
     acceptor = nullptr;
 }
 
-void Server::deleteConnection(Socket *_sock)
+void Server::deleteConnection(int fd)
 {
-    auto connect = connections[_sock->getFd()];
-    connections.erase(_sock->getFd());
-    delete connect;
-    connect = nullptr;
+    std::lock_guard<std::mutex> lock(connections_mtx);
+    connections.erase(fd);
 }
 
 void Server::newConnection(Socket *sk)
 {
-    Connection *connect = new Connection(loop, sk); // 内存由deleteConnection函数进行释放（通过Connection对象进行回调）
-    connect->setDelteConnectionCallback(std::bind(&Server::deleteConnection, this, std::placeholders::_1));
+    auto connect = std::make_shared<Connection>(loop, sk);
+    connect->setDeleteConnectionCallback(std::bind(&Server::deleteConnection, this, std::placeholders::_1));
+    connect->registerChannel();
+    std::lock_guard<std::mutex> lock(connections_mtx);
     connections[sk->getFd()] = connect;
 }

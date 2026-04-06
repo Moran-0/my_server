@@ -3,11 +3,14 @@
 #include "Util.h"
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/socket.h>
 
 Socket::Socket() : sockfd(-1)
 {
     sockfd = socket(AF_INET, SOCK_STREAM, 0); // 创建TCP套接字
     errif(sockfd == -1, "Failed to create socket");
+    int opt = 1;
+    errif(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1, "Failed to set SO_REUSEADDR"); // 将time-wait状态下的套接字端口号重新分配给新的套接字，跳过time-wait的等待阶段
 }
 Socket::Socket(int fd) : sockfd(fd)
 {
@@ -40,7 +43,6 @@ int Socket::accept(InetAddress *addr)
     auto sock_addr = addr->getAddr();
     auto addr_len = addr->getAddrLen();
     int client_fd = ::accept(sockfd, (sockaddr *)&sock_addr, &addr_len);
-    errif(client_fd == -1, "Failed to accept connection");
     return client_fd;
 }
 

@@ -3,9 +3,9 @@
 #include <stdexcept>
 #include <iostream>
 
-ThreadPool::ThreadPool(/* args */) : stop(false)
+ThreadPool::ThreadPool(int size) : stop(false)
 {
-    int size = std::thread::hardware_concurrency();
+    // int size = std::thread::hardware_concurrency();
     for (int i = 0; i < size; ++i)
     {
         threads.emplace_back(std::thread([this]()
@@ -31,17 +31,16 @@ ThreadPool::ThreadPool(/* args */) : stop(false)
 
 ThreadPool::~ThreadPool()
 {
-}
-
-void ThreadPool::addTask(std::function<void()> task)
-{
     {
-        std::lock_guard<std::mutex> lock(mtx);
-        if (stop)
-        {
-            throw std::runtime_error("线程池已停止，无法添加任务！");
-        }
-        tasks.emplace(task);
+        std::unique_lock<std::mutex> lock(mtx);
+        stop = true;
     }
-    cv.notify_one();
+    cv.notify_all();
+    for (auto &t : threads)
+    {
+        if (t.joinable())
+        {
+            t.join();
+        }
+    }
 }

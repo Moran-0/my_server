@@ -14,11 +14,12 @@ Acceptor::Acceptor(EventLoop *_loop) : loop(_loop)
     addr = new InetAddress("127.0.0.1", 8888);
     sock->bind(*addr);
     sock->listen();
-    sock->setNonBlocking();
+    // sock->setNonBlocking(); // 处理连接的时间较少，采用阻塞式socket
     acceptChannel = new Channel(loop, sock->getFd());
     std::function<void()> cb = std::bind(&Acceptor::acceptConnection, this);
-    acceptChannel->setCallback(cb);
-    acceptChannel->EnableReading();
+    acceptChannel->setReadCallback(cb);
+    acceptChannel->enableRead();
+    acceptChannel->setUseThreadPool(false);
 }
 
 Acceptor::~Acceptor()
