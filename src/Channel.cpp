@@ -1,7 +1,7 @@
 #include "Channel.h"
 #include "EventLoop.h"
 
-Channel::Channel(EventLoop *_loop, int _fd) : loop(_loop), fd(_fd), events(0), inEpoll(false), useThreadPool(true), handling(false)
+Channel::Channel(EventLoop *_loop, int _fd) : loop(_loop), fd(_fd), events(0), inEpoll(false)
 {
 }
 
@@ -62,20 +62,4 @@ void Channel::setInEpoll(bool _in)
 void Channel::setReadCallback(std::function<void()> cb)
 {
     readCallback = cb;
-}
-
-void Channel::setUseThreadPool(bool _useInfo)
-{
-    useThreadPool = _useInfo;
-}
-
-bool Channel::tryStartHandling()
-{
-    bool expected = false;
-    return handling.compare_exchange_strong(expected, true);
-}
-
-void Channel::finishHandling()
-{
-    handling.store(false);
 }

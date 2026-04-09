@@ -13,8 +13,6 @@ private:
     int fd;
     uint32_t events;
     bool inEpoll;
-    bool useThreadPool;         // 默认使用线程池
-    std::atomic<bool> handling; // 原子类型，标记处理状态，防止竞态发生
     std::function<void()> readCallback;
     std::function<void()> writeCallback;
 
@@ -33,11 +31,6 @@ public:
     bool getInEpoll();
     void setInEpoll(bool _in = true);
     void setReadCallback(std::function<void()>);
-    void setUseThreadPool(bool);
     bool tryStartHandling();
     void finishHandling();
-    inline bool getUseThreadPool()
-    {
-        return useThreadPool;
-    }
 };

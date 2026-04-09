@@ -7,13 +7,10 @@
 EventLoop::EventLoop() : ep(nullptr), quit(false)
 {
     ep = new Epoll();
-    thread_pool = new ThreadPool();
 }
 
 EventLoop::~EventLoop()
 {
-    delete thread_pool;
-    thread_pool = nullptr;
     delete ep;
     ep = nullptr;
 }
@@ -27,21 +24,7 @@ void EventLoop::loop()
         {
             auto ch = channel_event.first;
             auto ready = channel_event.second;
-            if (ch->getUseThreadPool())
-            {
-                if (ch->tryStartHandling())
-                {
-                    thread_pool->addTask([ch, ready]()
-                                         {
-                                             ch->handleEvent(ready);
-                                             ch->finishHandling();
-                                         });
-                }
-            }
-            else
-            {
-                ch->handleEvent(ready); // 连接事件不使用线程池
-            }
+            ch->handleEvent(ready);
         }
     }
 }

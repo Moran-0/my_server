@@ -8,7 +8,7 @@ class EventLoop
 private:
     Epoll *ep;
     bool quit;
-    ThreadPool *thread_pool;
+    // ThreadPool *thread_pool;
 
 public:
     EventLoop();
