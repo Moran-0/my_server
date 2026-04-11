@@ -6,8 +6,8 @@
 #include <vector>
 #include <iostream>
 
-#include "src/Server.h"
-#include "src/EventLoop.h"
+#include "EventLoop.h"
+#include "Server.h"
 using std::cout;
 using std::endl;
 using std::vector;

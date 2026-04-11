@@ -1,12 +1,12 @@
-#include <iostream>
-#include <sys/socket.h>
 #include <arpa/inet.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <unistd.h>
-#include "src/Util.h"
-#include "src/Socket.h"
-#include "src/InetAddress.h"
-#include "src/Buffer.h"
+#include <iostream>
+#include "Buffer.h"
+#include "InetAddress.h"
+#include "Socket.h"
+#include "Util.h"
 
 #define BUFFER_SIZE 1024
 using std::cout;
