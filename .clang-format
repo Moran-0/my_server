@@ -2,7 +2,7 @@ BasedOnStyle: LLVM
 IndentWidth: 4
 TabWidth: 4
 UseTab: Never
-ColumnLimit: 100
+ColumnLimit: 150
 BreakBeforeBraces: Allman
 AllowShortIfStatementsOnASingleLine: Never
 AllowShortLoopsOnASingleLine: false

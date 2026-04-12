@@ -10,7 +10,8 @@ Socket::Socket() : sockfd(-1)
     sockfd = socket(AF_INET, SOCK_STREAM, 0); // 创建TCP套接字
     errif(sockfd == -1, "Failed to create socket");
     int opt = 1;
-    errif(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1, "Failed to set SO_REUSEADDR"); // 将time-wait状态下的套接字端口号重新分配给新的套接字，跳过time-wait的等待阶段
+    errif(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1,
+          "Failed to set SO_REUSEADDR"); // 将time-wait状态下的套接字端口号重新分配给新的套接字，跳过time-wait的等待阶段
 }
 Socket::Socket(int fd) : sockfd(fd)
 {
@@ -24,10 +25,10 @@ Socket::~Socket()
         sockfd = -1;
     }
 }
-void Socket::bind(const InetAddress &addr)
+void Socket::bind(const InetAddress& addr)
 {
     auto sock_addr = addr.getAddr();
-    errif(::bind(sockfd, (sockaddr *)&sock_addr, addr.getAddrLen()) == -1, "Failed to bind socket");
+    errif(::bind(sockfd, (sockaddr*)&sock_addr, addr.getAddrLen()) == -1, "Failed to bind socket");
 }
 void Socket::listen()
 {
@@ -38,16 +39,18 @@ void Socket::setNonBlocking()
 {
     fcntl(sockfd, F_SETFL, fcntl(sockfd, F_GETFL) | O_NONBLOCK);
 }
-int Socket::accept(InetAddress *addr)
+int Socket::accept(InetAddress& addr)
 {
-    auto sock_addr = addr->getAddr();
-    auto addr_len = addr->getAddrLen();
-    int client_fd = ::accept(sockfd, (sockaddr *)&sock_addr, &addr_len);
+    sockaddr_in sock_addr = addr.getAddr();
+    socklen_t addr_len = addr.getAddrLen();
+    int client_fd = ::accept(sockfd, (sockaddr*)&sock_addr, &addr_len);
+    addr.setAddr(sock_addr);
+    addr.setAddrLen(addr_len);
     return client_fd;
 }
 
-void Socket::connect(const InetAddress &addr)
+void Socket::connect(const InetAddress& addr)
 {
     auto sock_addr = addr.getAddr();
-    errif(::connect(sockfd, (sockaddr *)&sock_addr, addr.getAddrLen()) == -1, "connect failed!");
+    errif(::connect(sockfd, (sockaddr*)&sock_addr, addr.getAddrLen()) == -1, "connect failed!");
 }

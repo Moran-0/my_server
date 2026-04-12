@@ -24,7 +24,7 @@ void oneClient(int msgs, int wait)
     sock->connect(addr);
 
     int sockfd = sock->getFd();
-
+    cout << "Create client " << sockfd << '\n';
     Buffer *sendBuffer = new Buffer();
     Buffer *readBuffer = new Buffer();
 

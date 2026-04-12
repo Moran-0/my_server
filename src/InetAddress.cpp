@@ -26,3 +26,13 @@ socklen_t InetAddress::getAddrLen() const
 {
     return addr_len;
 }
+
+void InetAddress::setAddr(const sockaddr_in& addr_)
+{
+    addr = addr_;
+}
+
+void InetAddress::setAddrLen(socklen_t len_)
+{
+    addr_len = len_;
+}

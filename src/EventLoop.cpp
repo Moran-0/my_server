@@ -6,13 +6,8 @@
 
 EventLoop::EventLoop() : ep(nullptr), quit(false)
 {
-    ep = new Epoll();
-}
-
-EventLoop::~EventLoop()
-{
-    delete ep;
-    ep = nullptr;
+    // ep = new Epoll();
+    ep = std::make_unique<Epoll>();
 }
 
 void EventLoop::loop()
@@ -22,7 +17,7 @@ void EventLoop::loop()
         auto chs = ep->poll();
         for (auto &channel_event : chs)
         {
-            auto ch = channel_event.first;
+            auto* ch = channel_event.first;
             auto ready = channel_event.second;
             ch->handleEvent(ready);
         }

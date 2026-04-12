@@ -1,5 +1,6 @@
 #pragma once
 #include <functional>
+#include <memory>
 
 class EventLoop;
 class Socket;
@@ -9,15 +10,14 @@ class Channel;
 class Acceptor
 {
 private:
-    EventLoop *loop;
-    Socket *sock;
-    InetAddress *addr;
-    Channel *acceptChannel;
+  std::unique_ptr<Socket> sock;
+  std::unique_ptr<InetAddress> addr;
+  std::unique_ptr<Channel> acceptChannel;
 
 public:
     Acceptor(EventLoop *_loop);
-    ~Acceptor();
+    ~Acceptor() = default;
     void acceptConnection();
-    std::function<void(Socket *)> newConnectionCallback;
-    void setNewConnectionCallback(std::function<void(Socket *)> cb);
+    std::function<void(int)> newConnectionCallback;
+    void setNewConnectionCallback(std::function<void(int)> cb);
 };

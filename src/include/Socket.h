@@ -11,7 +11,7 @@ public:
     ~Socket();
     void bind(const InetAddress &addr);
     void listen();
-    int accept(InetAddress *addr);
+    int accept(InetAddress& addr);
     void connect(const InetAddress &addr);
     void setNonBlocking();
     int getFd() const { return sockfd; }

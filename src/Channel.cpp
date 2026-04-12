@@ -5,10 +5,6 @@ Channel::Channel(EventLoop *_loop, int _fd) : loop(_loop), fd(_fd), events(0), i
 {
 }
 
-Channel::~Channel()
-{
-}
-
 void Channel::handleEvent(uint32_t ready)
 {
     if (ready & (EPOLLIN | EPOLLPRI))
@@ -44,12 +40,12 @@ void Channel::useET()
     loop->updateChannel(this);
 }
 
-uint32_t Channel::getEvents()
+uint32_t Channel::getEvents() const
 {
     return events;
 }
 
-bool Channel::getInEpoll()
+bool Channel::getInEpoll() const
 {
     return inEpoll;
 }
@@ -61,5 +57,5 @@ void Channel::setInEpoll(bool _in)
 
 void Channel::setReadCallback(std::function<void()> cb)
 {
-    readCallback = cb;
+    readCallback = std::move(cb);
 }

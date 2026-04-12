@@ -18,7 +18,7 @@ private:
 
 public:
     Channel(EventLoop *_loop, int _fd);
-    ~Channel();
+    ~Channel() = default;
     void handleEvent(uint32_t ready);
     void enableRead();
     void disableAll();
@@ -27,10 +27,8 @@ public:
     {
         return fd;
     }
-    uint32_t getEvents();
-    bool getInEpoll();
+    uint32_t getEvents() const;
+    bool getInEpoll() const;
     void setInEpoll(bool _in = true);
     void setReadCallback(std::function<void()>);
-    bool tryStartHandling();
-    void finishHandling();
 };

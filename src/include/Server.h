@@ -12,16 +12,17 @@ class Server
 {
 private:
     // EventLoop *loop;
-    EventLoop *mainReactor;
-    Acceptor *acceptor;
-    std::unordered_map<int, std::shared_ptr<Connection>> connections;
-    std::vector<EventLoop *> subReactors;
-    ThreadPool *threadPool;
-    std::mutex connections_mtx;
+  std::unique_ptr<EventLoop> mainReactor;
+  std::unique_ptr<Acceptor> acceptor;
+  std::unordered_map<int, std::unique_ptr<Connection>> connections;
+  std::vector<std::unique_ptr<EventLoop>> subReactors;
+  std::unique_ptr<ThreadPool> threadPool;
+  std::mutex connections_mtx;
 
 public:
-    Server(EventLoop *_loop);
-    ~Server();
-    void deleteConnection(int fd);
-    void newConnection(Socket *sk);
+  Server();
+  ~Server() = default;
+  void start();
+  void deleteConnection(int fd);
+  void newConnection(int sock_fd);
 };

@@ -5,7 +5,7 @@
 #include "Buffer.h"
 
 #include <iostream>
-#include <string.h>
+#include <cstring>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -14,10 +14,11 @@ using std::endl;
 
 #define READ_BUFFER 512
 
-Connection::Connection(EventLoop *_loop, Socket *_sock) : loop(_loop), sock(_sock)
+Connection::Connection(EventLoop* _loop, int sock_fd) : loop(_loop)
 {
+    sock = std::make_unique<Socket>(sock_fd);
     sock->setNonBlocking();
-    clnt_ch = new Channel(loop, sock->getFd());
+    clnt_ch = std::make_unique<Channel>(loop, sock->getFd());
     readBuffer = new Buffer();
 }
 
@@ -25,26 +26,16 @@ Connection::~Connection()
 {
     delete readBuffer;
     readBuffer = nullptr;
-    delete clnt_ch;
-    clnt_ch = nullptr;
-    delete sock;
-    sock = nullptr;
 }
 
 void Connection::registerChannel()
 {
     int sockfd = sock->getFd();
-    std::weak_ptr<Connection> weak_self = weak_from_this();
-    clnt_ch->setReadCallback([weak_self, sockfd]()
+    clnt_ch->setReadCallback([this, sockfd]()
                              {
-                                 auto self = weak_self.lock();
-                                 if (!self)
+                                 if (echo(sockfd))
                                  {
-                                     return;
-                                 }
-                                 if (self->echo(sockfd))
-                                 {
-                                     self->deleteConnectionCallback(sockfd);
+                                     deleteConnectionCallback(sockfd);
                                  } });
     clnt_ch->enableRead();
 }
@@ -76,7 +67,7 @@ bool Connection::echo(int sockfd)
             if (!send(sockfd))
             {
                 clnt_ch->disableAll();
-                loop->removeChannel(clnt_ch);
+                loop->removeChannel(clnt_ch.get());
                 return true;
             }
             readBuffer->clear();
@@ -84,9 +75,9 @@ bool Connection::echo(int sockfd)
         }
         else if (byte_read == 0)
         {
-            cout << "EOF, client " << sockfd << " disconnected!" << endl;
+            cout << "EOF, client " << sockfd << " disconnected!" << '\n';
             clnt_ch->disableAll();
-            loop->removeChannel(clnt_ch);
+            loop->removeChannel(clnt_ch.get());
             return true;
         }
     }
@@ -95,7 +86,7 @@ bool Connection::echo(int sockfd)
 
 void Connection::setDeleteConnectionCallback(std::function<void(int)> cb)
 {
-    deleteConnectionCallback = cb;
+    deleteConnectionCallback = std::move(cb);
 }
 
 bool Connection::send(int sockfd)
