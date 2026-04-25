@@ -2,7 +2,9 @@
 #include "Util.h"
 #include <unistd.h>
 #include <string>
-#include <string.h>
+#include <cstring>
+#include <iostream>
+
 #include "Channel.h"
 
 constexpr int MAX_EVENTS = 1024;
@@ -10,7 +12,9 @@ constexpr int MAX_EVENTS = 1024;
 Epoll::Epoll() : epoll_fd(-1), events()
 {
     epoll_fd = epoll_create1(0);
-    errif(epoll_fd == -1, "Failed to create epoll instance");
+    if (epoll_fd == -1) {
+        std::cout << "Failed to create epoll instance: " << strerror(errno) << '\n';
+    }
     events.resize(MAX_EVENTS);
     std::fill(events.begin(), events.end(), epoll_event{0});
 }
@@ -22,30 +26,18 @@ Epoll::~Epoll()
         epoll_fd = -1;
     }
 }
-// void Epoll::add(int fd, uint32_t events)
-// {
-//     epoll_event ev;
-//     ev.events = events;
-//     ev.data.fd = fd;
-//     errif(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev) == -1, "Failed to add file descriptor to epoll");
-// }
+
 int Epoll::wait(std::vector<epoll_event> &events, int timeout)
 {
     int num_events = epoll_wait(epoll_fd, events.data(), MAX_EVENTS, timeout);
-    errif(num_events == -1, "Failed to wait for epoll events");
+    if (num_events == -1) {
+        if (errno != EINTR) {
+            std::cout << "Failed to wait for epoll events: " << strerror(errno) << '\n';
+        }
+        return 0; // 中断信号导致的错误，返回0表示没有事件发生
+    }
     return num_events;
 }
-// std::vector<epoll_event> Epoll::poll(int timeout)
-// {
-//     std::vector<epoll_event> triggered_events;
-//     int num_events = wait(events, timeout);
-//     errif(num_events == -1, "Failed to poll epoll events");
-//     for (int i = 0; i < num_events; ++i)
-//     {
-//         triggered_events.push_back(events[i]);
-//     }
-//     return triggered_events;
-// }
 
 std::vector<Epoll::ChannelEvent> Epoll::poll(int timeout)
 {
@@ -53,7 +45,7 @@ std::vector<Epoll::ChannelEvent> Epoll::poll(int timeout)
     int nfds = wait(events, timeout);
     for (int i = 0; i < nfds; ++i)
     {
-        auto ch = static_cast<Channel *>(events.at(i).data.ptr);
+        auto* ch(static_cast<Channel*>(events.at(i).data.ptr));
         uint32_t ready = events.at(i).events;
         channels.emplace_back(ch, ready);
     }
@@ -67,7 +59,9 @@ void Epoll::remove(Channel *channel)
         return;
     }
     int fd = channel->getFd();
-    errif(epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr) == -1, "epoll_ctl delete failed!");
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr) == -1) {
+        std::cout << "Failed to remove fd " << fd << " from epoll instance" << '\n';
+    }
     channel->setInEpoll(false);
 }
 
@@ -80,11 +74,15 @@ void Epoll::updateChannel(Channel *channel)
     event.events = channel->getEvents();
     if (!channel->getInEpoll())
     {
-        errif(epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &event) == -1, "epoll_ctl add failed!");
+        if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &event) == -1) {
+            std::cout << "Failed to add fd " << fd << " to epoll instance" << '\n';
+        }
         channel->setInEpoll();
     }
     else
     {
-        errif(epoll_ctl(epoll_fd, EPOLL_CTL_MOD, fd, &event) == -1, "epoll_ctl modify failed!");
+        if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, fd, &event) == -1) {
+            std::cout << "Failed to modify fd " << fd << " in epoll instance" << '\n';
+        }
     }
 }

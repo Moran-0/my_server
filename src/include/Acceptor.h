@@ -1,23 +1,22 @@
 #pragma once
 #include <functional>
 #include <memory>
-
+#include "Common.h"
 class EventLoop;
 class Socket;
 class InetAddress;
 class Channel;
 
-class Acceptor
-{
-private:
-  std::unique_ptr<Socket> sock;
-  std::unique_ptr<InetAddress> addr;
-  std::unique_ptr<Channel> acceptChannel;
+class Acceptor : public NoCopy, NoMove {
+  private:
+    std::unique_ptr<Socket> m_sock;
+    std::unique_ptr<InetAddress> m_addr;
+    std::unique_ptr<Channel> m_channel;
 
-public:
-    Acceptor(EventLoop *_loop);
+  public:
+    Acceptor(EventLoop* _loop, const char* ip, const int port);
     ~Acceptor() = default;
-    void acceptConnection();
+    void AcceptConnection();
     std::function<void(int)> newConnectionCallback;
-    void setNewConnectionCallback(std::function<void(int)> cb);
+    void SetNewConnectionCallback(std::function<void(int)> cb);
 };

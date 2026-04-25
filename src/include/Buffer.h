@@ -13,7 +13,7 @@ public:
     void append(const char *_buf, size_t _size);
     size_t size();
     const char *c_str();
-    void clear();
-    void getline();
-    void setBuf(const char *);
+    void Clear();
+    void Getline();
+    void SetBuf(const char *);
 };

@@ -32,7 +32,7 @@ void oneClient(int msgs, int wait)
     int count = 0;
     while (count < msgs)
     {
-        sendBuffer->setBuf("I'm client!");
+        sendBuffer->SetBuf("I'm client!");
         ssize_t write_bytes = write(sockfd, sendBuffer->c_str(), sendBuffer->size());
         if (write_bytes == -1)
         {
@@ -61,7 +61,7 @@ void oneClient(int msgs, int wait)
                 break;
             }
         }
-        readBuffer->clear();
+        readBuffer->Clear();
     }
     delete sendBuffer;
     delete readBuffer;

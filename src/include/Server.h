@@ -3,26 +3,32 @@
 #include <mutex>
 #include <unordered_map>
 #include <vector>
+#include <functional>
+
 class EventLoop;
 class Socket;
 class Acceptor;
-class Connection;
+class TcpConnection;
 class ThreadPool;
-class Server
-{
-private:
+class TcpServer {
+  private:
     // EventLoop *loop;
-  std::unique_ptr<EventLoop> mainReactor;
-  std::unique_ptr<Acceptor> acceptor;
-  std::unordered_map<int, std::unique_ptr<Connection>> connections;
-  std::vector<std::unique_ptr<EventLoop>> subReactors;
-  std::unique_ptr<ThreadPool> threadPool;
-  std::mutex connections_mtx;
+    std::unique_ptr<EventLoop> m_mainReactor;
+    std::unique_ptr<Acceptor> m_acceptor;
+    std::unordered_map<int, std::unique_ptr<TcpConnection>> m_connections;
+    std::vector<std::unique_ptr<EventLoop>> m_subReactors;
+    std::unique_ptr<ThreadPool> m_threadPool;
+    std::mutex m_connections_mtx;
 
-public:
-  Server();
-  ~Server() = default;
-  void start();
-  void deleteConnection(int fd);
-  void newConnection(int sock_fd);
+    std::function<void(TcpConnection*)> m_messageCallback;
+
+  public:
+    TcpServer();
+    ~TcpServer() = default;
+    void start();
+    void CloseConnection(int fd);
+    void CreateConnection(int sock_fd);
+    void SetMessageCallback(std::function<void(TcpConnection*)> cb) {
+        m_messageCallback = std::move(cb);
+    }
 };

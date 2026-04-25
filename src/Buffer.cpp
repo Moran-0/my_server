@@ -32,17 +32,17 @@ const char *Buffer::c_str()
     return buf.c_str();
 }
 
-void Buffer::clear()
+void Buffer::Clear()
 {
     buf.clear();
 }
-
-void Buffer::getline()
+/// @brief 从标准输入中读取一行进入缓冲
+void Buffer::Getline()
 {
-    clear();
+    Clear();
     std::getline(std::cin, buf);
 }
-void Buffer::setBuf(const char *_buf)
+void Buffer::SetBuf(const char *_buf)
 {
     buf.clear();
     buf.append(_buf);

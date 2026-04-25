@@ -7,4 +7,6 @@
 .vscode/*
 # 忽略构建目录
 build/*
+# 忽略codex生成的文件
+.codex
 

@@ -15,7 +15,7 @@ using std::vector;
 
 int main()
 {
-    auto* server = new Server();
+    auto* server = new TcpServer();
     server->start();
     delete server;
     server = nullptr;

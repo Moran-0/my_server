@@ -4,25 +4,25 @@
 #include "ThreadPool.h"
 #include <iostream>
 
-EventLoop::EventLoop() : ep(nullptr), quit(false)
-{
+EventLoop::EventLoop() : ep(nullptr), m_quit(false) {
     // ep = new Epoll();
     ep = std::make_unique<Epoll>();
 }
 
 void EventLoop::loop()
 {
-    while (!quit)
-    {
+    while (!m_quit) {
         auto chs = ep->poll();
         for (auto &channel_event : chs)
         {
-            auto* ch = channel_event.first;
+            auto ch = channel_event.first;
             auto ready = channel_event.second;
             ch->handleEvent(ready);
         }
     }
 }
+
+void EventLoop::quit() {}
 
 void EventLoop::updateChannel(Channel *ch)
 {
