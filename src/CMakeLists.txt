@@ -14,7 +14,8 @@ set_target_properties(pine PROPERTIES
 
 target_include_directories(pine
     PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/base
+        ${CMAKE_CURRENT_SOURCE_DIR}/tcp
 )
 
 target_link_libraries(pine
