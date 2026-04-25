@@ -9,26 +9,36 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <algorithm>
+#include <fcntl.h>
 
 using std::cout;
 using std::endl;
 
 constexpr int READ_BUFFER = 1024;
 
-TcpConnection::TcpConnection(EventLoop* _loop, int sock_fd) : m_loop(_loop) {
-    m_sock = std::make_unique<Socket>(sock_fd);
-    m_sock->setNonBlocking();
-    m_channel = std::make_unique<Channel>(m_loop, m_sock->getFd());
+TcpConnection::TcpConnection(EventLoop* _loop, int sock_fd) : m_loop(_loop), m_connectedFd(sock_fd) {
+    fcntl(m_connectedFd, F_SETFL, fcntl(m_connectedFd, F_GETFL) | O_NONBLOCK); // 设置非阻塞IO
+    m_channel = std::make_unique<Channel>(m_loop, m_connectedFd);
     m_channel->useET();
     m_channel->setReadCallback([this]() { this->HandleMessage(); });
     m_readBuffer = std::make_unique<Buffer>();
     m_writeBuffer = std::make_unique<Buffer>();
     m_state = State::Connected;
 }
+TcpConnection::~TcpConnection() {
+    ::close(m_connectedFd); // 关闭连接
+}
 /// @brief 建立连接，监听可读事件
 void TcpConnection::EstablishConnection() {
-    int sockfd = m_sock->getFd();
     m_channel->enableRead();
+    m_channel->Tie(shared_from_this());
+    if (m_onConnect) {
+        m_onConnect(shared_from_this()); // 连接建立成功，执行回调函数
+    }
+}
+void TcpConnection::DestroyConnection() {
+    m_channel->disableAll();
+    m_loop->removeChannel(m_channel.get());
 }
 /// @brief 读取缓冲区数据
 void TcpConnection::Read() {
@@ -47,56 +57,6 @@ void TcpConnection::Write() {
     m_writeBuffer->Clear();
 }
 
-bool TcpConnection::echo(int sockfd) {
-    char buf[READ_BUFFER];
-    while (true)
-    {
-        // std::fill(buf, buf + READ_BUFFER, 0);
-        memset(buf, 0, READ_BUFFER); // 性能更优
-        auto byte_read = read(sockfd, buf, READ_BUFFER);
-        if (byte_read > 0)
-        {
-            cout << "Get messages from " << sockfd << ":" << buf << '\n';
-            m_readBuffer->append(buf, byte_read);
-            // write(sockfd, buf, sizeof(buf));
-        }
-        else if (byte_read == -1 && errno == EINTR)
-        {
-            // 客户端正常中断
-            cout << "contineu reading..." << '\n';
-            continue;
-        }
-        else if (byte_read == -1 && ((errno == EAGAIN) || (errno == EWOULDBLOCK)))
-        {
-            // 非阻塞IO表示数据全部读取完毕
-            cout << "Finish reading once" << '\n';
-            if (!send(sockfd))
-            {
-                m_channel->disableAll();
-                m_loop->removeChannel(m_channel.get());
-                return true;
-            }
-            m_readBuffer->Clear();
-            break;
-        }
-        else if (byte_read == 0)
-        {
-            cout << "EOF, client " << sockfd << " disconnected!" << '\n';
-            m_channel->disableAll();
-            m_loop->removeChannel(m_channel.get());
-            return true;
-        }
-    }
-    return false;
-}
-
-void TcpConnection::setCloseConnectionCallback(std::function<void(int)> cb) {
-    m_closeConnectionCallback = std::move(cb);
-}
-void TcpConnection::SetMessageCallback(std::function<void(TcpConnection*)> cb) {
-    m_messageCallback = std::move(cb);
-}
-
 /// @brief 处理接收到的消息
 void TcpConnection::HandleMessage() {
     Read();
@@ -108,10 +68,8 @@ void TcpConnection::HandleMessage() {
 void TcpConnection::HandleClose() {
     if (m_state != State::Closed) {
         m_state = State::Closed;
-        m_channel->disableAll();
-        m_loop->removeChannel(m_channel.get());
         if (m_closeConnectionCallback) {
-            m_closeConnectionCallback(m_sock->getFd());
+            m_closeConnectionCallback(m_connectedFd);
         }
     }
 }
@@ -142,7 +100,7 @@ bool TcpConnection::send(int sockfd) {
 }
 /// @brief 非阻塞I/O读取
 void TcpConnection::ReadNonBlocking() {
-    int sockfd = m_sock->getFd();
+    int sockfd = m_connectedFd;
     char buf[READ_BUFFER];
     while (true) {
         // std::fill(buf, buf + READ_BUFFER, 0);
@@ -173,7 +131,7 @@ void TcpConnection::ReadNonBlocking() {
 
 /// @brief 非阻塞IO写入
 void TcpConnection::WriteNonBlocking() {
-    int sockfd = m_sock->getFd();
+    int sockfd = m_connectedFd;
     auto data_size = m_writeBuffer->size();
     auto data_left = data_size; // 未发送的数据大小
     char buf[data_size];

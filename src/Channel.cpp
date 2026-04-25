@@ -3,10 +3,19 @@
 
 Channel::Channel(EventLoop* _loop, int _fd) : m_loop(_loop), m_fd(_fd), m_events(0), m_inEpoll(false) {}
 
-void Channel::handleEvent(uint32_t ready)
-{
-    if (ready & (EPOLLIN | EPOLLPRI))
-    {
+void Channel::HandleEvent(uint32_t ready) {
+    if (m_tied) {
+        std::shared_ptr<void> guard = m_tie.lock(); // 确保处理事件时，Channel对象还存在
+        if (guard) {
+            HandleEventWithGuard(ready);
+        }
+    } else {
+        HandleEventWithGuard(ready);
+    }
+}
+
+void Channel::HandleEventWithGuard(uint32_t ready) {
+    if (ready & (EPOLLIN | EPOLLPRI)) {
         if (m_readCallback)
         {
             m_readCallback();

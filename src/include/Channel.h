@@ -2,6 +2,7 @@
 #include <atomic>
 #include <sys/epoll.h>
 #include <functional>
+#include <memory>
 #include "Common.h"
 
 class Epoll;
@@ -16,11 +17,14 @@ class Channel : public NoCopy, NoMove {
     CallbackFunc m_readCallback;
     CallbackFunc m_writeCallback;
     CallbackFunc m_connCallback;
+    bool m_tied;
+    std::weak_ptr<void> m_tie;
 
   public:
     Channel(EventLoop* _loop, int _fd);
     ~Channel() = default;
-    void handleEvent(uint32_t ready);
+    void HandleEvent(uint32_t ready);
+    void HandleEventWithGuard(uint32_t ready);
     void enableRead();
     void enableWrite();
     void setEvents(uint32_t ev);
@@ -35,4 +39,10 @@ class Channel : public NoCopy, NoMove {
     void setReadCallback(CallbackFunc);
     void setWriteCallback(CallbackFunc);
     void setConnCallback(CallbackFunc);
+
+    // 设定tie关系，防止Channel被手动remove掉后，EventLoop还继续调用Channel的回调函数
+    void Tie(const std::shared_ptr<void>& obj) {
+        m_tie = obj;
+        m_tied = true;
+    }
 };

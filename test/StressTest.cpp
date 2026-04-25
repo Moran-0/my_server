@@ -26,7 +26,7 @@ void oneClient(int msgs, int wait)
     int sockfd = sock->getFd();
     cout << "Create client " << sockfd << '\n';
     Buffer *sendBuffer = new Buffer();
-    Buffer *readBuffer = new Buffer();
+    // Buffer *readBuffer = new Buffer();
 
     sleep(wait);
     int count = 0;
@@ -39,32 +39,33 @@ void oneClient(int msgs, int wait)
             printf("socket already disconnected, can't write any more!\n");
             break;
         }
-        int already_read = 0;
-        char buf[1024]; // 这个buf大小无所谓
-        while (true)
-        {
-            bzero(&buf, sizeof(buf));
-            ssize_t read_bytes = read(sockfd, buf, sizeof(buf));
-            if (read_bytes > 0)
-            {
-                readBuffer->append(buf, read_bytes);
-                already_read += read_bytes;
-            }
-            else if (read_bytes == 0)
-            { // EOF
-                printf("server disconnected!\n");
-                exit(EXIT_SUCCESS);
-            }
-            if (already_read >= sendBuffer->size())
-            {
-                printf("count: %d, message from server: %s\n", count++, readBuffer->c_str());
-                break;
-            }
-        }
-        readBuffer->Clear();
+        ++count;
+        // int already_read = 0;
+        // char buf[1024]; // 这个buf大小无所谓
+        // while (true)
+        // {
+        //     bzero(&buf, sizeof(buf));
+        //     ssize_t read_bytes = read(sockfd, buf, sizeof(buf));
+        //     if (read_bytes > 0)
+        //     {
+        //         readBuffer->append(buf, read_bytes);
+        //         already_read += read_bytes;
+        //     }
+        //     else if (read_bytes == 0)
+        //     { // EOF
+        //         printf("server disconnected!\n");
+        //         exit(EXIT_SUCCESS);
+        //     }
+        //     if (already_read >= sendBuffer->size())
+        //     {
+        //         printf("count: %d, message from server: %s\n", count++, readBuffer->c_str());
+        //         break;
+        //     }
+        // }
+        // readBuffer->Clear();
     }
     delete sendBuffer;
-    delete readBuffer;
+    // delete readBuffer;
     delete sock;
 }
 
