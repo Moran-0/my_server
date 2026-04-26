@@ -39,6 +39,7 @@ void TcpConnection::EstablishConnection() {
 void TcpConnection::DestroyConnection() {
     m_channel->disableAll();
     m_loop->removeChannel(m_channel.get());
+    m_state = State::Closed;
 }
 /// @brief 读取缓冲区数据
 void TcpConnection::Read() {
@@ -60,16 +61,15 @@ void TcpConnection::Write() {
 /// @brief 处理接收到的消息
 void TcpConnection::HandleMessage() {
     Read();
-    if (m_messageCallback) {
-        m_messageCallback(this);
+    if (m_onMessage) {
+        m_onMessage(shared_from_this());
     }
 }
 /// @brief 处理关闭请求
 void TcpConnection::HandleClose() {
     if (m_state != State::Closed) {
-        m_state = State::Closed;
-        if (m_closeConnectionCallback) {
-            m_closeConnectionCallback(m_connectedFd);
+        if (m_onClose) {
+            m_onClose(shared_from_this());
         }
     }
 }

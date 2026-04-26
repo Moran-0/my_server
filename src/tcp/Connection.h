@@ -5,7 +5,6 @@
 #include "Buffer.h"
 #include "Common.h"
 
-class Socket;
 class Channel;
 class EventLoop;
 class Buffer;
@@ -17,9 +16,7 @@ class TcpConnection : public NoCopy, public NoMove, public std::enable_shared_fr
     EventLoop* m_loop; // 外部传入，TcpConnection不负责管理生命周期
     int m_connectedFd;
     std::unique_ptr<Channel> m_channel;
-    std::function<void(int)> m_closeConnectionCallback;
     std::function<void(const std::shared_ptr<TcpConnection>&)> m_onClose;
-    std::function<void(TcpConnection*)> m_messageCallback;
     std::function<void(const std::shared_ptr<TcpConnection>&)> m_onMessage;
     std::function<void(const std::shared_ptr<TcpConnection>&)> m_onConnect;
 

@@ -6,6 +6,9 @@
 #include <condition_variable>
 #include <mutex>
 #include <future>
+
+/**暂时被EventLoopThreadPool替代 */
+
 constexpr int MAX_POOL_SIZE = 256;
 constexpr int MAX_TASK_SIZE = 4096;
 using std::vector;

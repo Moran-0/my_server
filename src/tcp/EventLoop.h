@@ -23,7 +23,7 @@ private:
 
 public:
     EventLoop();
-    ~EventLoop() = default;
+    ~EventLoop();
     void loop();
     void quit(); // todo
     void updateChannel(Channel *ch);

@@ -8,10 +8,10 @@ class EventLoopThread {
   public:
     EventLoopThread();
     ~EventLoopThread();
-    EventLoop* startLoop();
+    EventLoop* StartLoop();
 
   private:
-    void threadFunc();
+    void ThreadFunc();
 
   private:
     EventLoop* m_loop;

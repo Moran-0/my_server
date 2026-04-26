@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <vector>
 #include <functional>
+#include "EventLoopThreadPool.h"
 
 class EventLoop;
 class Socket;
@@ -16,8 +17,9 @@ class TcpServer {
     std::unique_ptr<EventLoop> m_mainReactor;
     std::unique_ptr<Acceptor> m_acceptor;
     std::unordered_map<int, std::shared_ptr<TcpConnection>> m_connections;
-    std::vector<std::unique_ptr<EventLoop>> m_subReactors;
-    std::unique_ptr<ThreadPool> m_threadPool;
+    std::unique_ptr<EventLoopThreadPool> m_subReactorsPool;
+    // std::vector<std::unique_ptr<EventLoop>> m_subReactors;
+    // std::unique_ptr<ThreadPool> m_threadPool;
     std::mutex m_connections_mtx;
 
     std::function<void(const std::shared_ptr<TcpConnection>&)> m_messageCallback;

@@ -13,25 +13,26 @@ EventLoopThread::~EventLoopThread() {
     }
 }
 
-EventLoop* EventLoopThread::startLoop() {
-    m_thread = std::thread(std::bind(&EventLoopThread::threadFunc, this));
+EventLoop* EventLoopThread::StartLoop() {
+    // m_thread = std::thread(std::bind(&EventLoopThread::ThreadFunc, this));
+    m_thread = std::thread([this]() { this->ThreadFunc(); });
     {
         std::unique_lock<std::mutex> lock(m_mtx);
         while (m_loop == nullptr) {
-            m_cv.wait(lock);
+            m_cv.wait(lock); // 等待m_thread线程函数创建EventLoop并设置m_loop
         }
     }
     return m_loop;
 }
 
-void EventLoopThread::threadFunc() {
+void EventLoopThread::ThreadFunc() {
     EventLoop loop;
     {
         std::lock_guard<std::mutex> lock(m_mtx);
         m_loop = &loop;
         m_cv.notify_one();
     }
-    m_loop->loop();
+    m_loop->loop(); // loop函数会一直运行，直到调用quit()退出循环，loop自动析构
     {
         std::lock_guard<std::mutex> lock(m_mtx);
         m_loop = nullptr;

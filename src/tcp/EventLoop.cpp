@@ -6,7 +6,8 @@
 #include <sys/eventfd.h>
 #include <unistd.h>
 
-EventLoop::EventLoop() : m_ep(nullptr), m_quit(false), m_callingTodoList(false) {
+EventLoop::EventLoop() : m_ep(nullptr), m_quit(false), m_callingTodoList(false), m_threadId(CurrentThread::Tid()) {
+    // 将Loop函数分配给了不同的线程，获取执行该函数的线程
     m_ep = std::make_unique<Epoll>();
     m_wakeupFd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
     m_wakeupChannel = std::make_unique<Channel>(this, m_wakeupFd);
@@ -14,9 +15,12 @@ EventLoop::EventLoop() : m_ep(nullptr), m_quit(false), m_callingTodoList(false) 
     m_wakeupChannel->enableRead();
 }
 
-void EventLoop::loop()
-{
-    m_threadId = CurrentThread::Tid(); // 获取执行loop函数的线程ID
+EventLoop::~EventLoop() {
+    removeChannel(m_wakeupChannel.get()); // 将监听m_wakeupFd的Channel从EventLoop中移除
+    ::close(m_wakeupFd);
+}
+
+void EventLoop::loop() {
     while (!m_quit) {
         auto chs = m_ep->poll();
         for (auto &channel_event : chs)
