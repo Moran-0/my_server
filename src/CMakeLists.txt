@@ -16,6 +16,7 @@ target_include_directories(pine
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/base
         ${CMAKE_CURRENT_SOURCE_DIR}/tcp
+        ${CMAKE_CURRENT_SOURCE_DIR}/http
 )
 
 target_link_libraries(pine
