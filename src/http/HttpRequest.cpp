@@ -4,14 +4,14 @@ constexpr char CRLF[] = "\r\n";
 
 HttpRequest::HttpRequest()
     : m_method(HttpMethod::INVALID), m_version(HttpVersion::UNKNOWN), m_parseState(HttpParseState::REQUEST_LINE), m_lineState(LineState::METHOD),
-      m_headerState(HeaderState::KEY), m_contentLength(0) {}
+      m_headerState(HeaderState::KEY), m_contentLength(0), m_isKeepAlive(false) {}
 
-bool HttpRequest::Parse(std::string& buffer) {
+int HttpRequest::Parse(const std::string& buffer) {
     if (buffer.empty()) {
-        return false;
+        return -1;
     }
     const char* ptr = buffer.c_str();
-    m_start = ptr;
+    m_start = m_parseStart = m_end = ptr;
     for (size_t i = 0; i < buffer.size(); ++i) {
         char c = buffer[i];
         m_curPos = ptr + i;
@@ -26,12 +26,12 @@ bool HttpRequest::Parse(std::string& buffer) {
             ParseBody(c);
             break;
         case HttpParseState::ERROR:
-            return false;
+            return -1;
         default:
             break;
         }
     }
-    return true;
+    return m_end - m_start;
 }
 
 void HttpRequest::SetMethod(const std::string_view& method) {
@@ -123,29 +123,48 @@ std::string HttpRequest::GetHeader(const std::string& key) const {
     }
     return "";
 }
+/// @brief 重置HttpRequest对象的状态和成员变量，以便处理新的HTTP请求
+void HttpRequest::Reset() {
+    m_method = HttpMethod::INVALID;
+    m_version = HttpVersion::UNKNOWN;
+    m_url.clear();
+    m_requestParameters.clear();
+    m_protocol.clear();
+    m_headers.clear();
+    m_body.clear();
+    m_contentLength = 0;
+    m_postParameters.clear();
+    m_parseState = HttpParseState::REQUEST_LINE;
+    m_lineState = LineState::METHOD;
+    m_headerState = HeaderState::KEY;
+    m_parseStart = m_curPos = m_start = m_end = nullptr;
+}
 
 void HttpRequest::ParseRequestLine(const char c) {
     switch (m_lineState) {
     case LineState::METHOD:
         if (c == ' ') {
-            std::string_view method(m_start, m_curPos - m_start);
+            std::string_view method(m_parseStart, m_curPos - m_parseStart);
             SetMethod(method);
             m_lineState = LineState::URL;
-            m_start = m_curPos + 1;
+            m_parseStart = m_curPos + 1;
         }
         break;
     case LineState::URL:
         if (c == ' ') {
-            std::string_view url(m_start, m_curPos - m_start);
+            std::string_view url(m_parseStart, m_curPos - m_parseStart);
             SetUrl(url);
             m_lineState = LineState::VERSION;
-            m_start = m_curPos + 1;
+            m_parseStart = m_curPos + 1;
         }
         break;
     case LineState::VERSION:
         if (c == '\r') {
-            std::string_view version(m_start, m_curPos - m_start);
+            std::string_view version(m_parseStart, m_curPos - m_parseStart);
             SetVersion(version);
+            if (m_version == HttpVersion::HTTP_11) {
+                m_isKeepAlive = true; // HTTP/1.1默认使用长连接
+            }
             m_lineState = LineState::LINE_END;
         }
         break;
@@ -153,7 +172,8 @@ void HttpRequest::ParseRequestLine(const char c) {
         if (c == '\n') {
             m_parseState = HttpParseState::HEADERS;
             m_headerState = HeaderState::KEY;
-            m_start = m_curPos + 1;
+            m_end = m_curPos + 1;
+            m_parseStart = m_curPos + 1;
         } else {
             m_parseState = HttpParseState::ERROR;
         }
@@ -170,8 +190,8 @@ void HttpRequest::ParseHeader(const char c) {
     case HeaderState::KEY:
         if (c == ':') {
             m_headerState = HeaderState::COLON;
-            curKey = std::string(m_start, m_curPos - m_start);
-            m_start = m_curPos + 1;
+            curKey = std::string(m_parseStart, m_curPos - m_parseStart);
+            m_parseStart = m_curPos + 1;
         } else if (c == '\r' || c == '\n') {
             m_parseState = HttpParseState::ERROR;
         }
@@ -185,7 +205,7 @@ void HttpRequest::ParseHeader(const char c) {
         break;
     case HeaderState::SPACE_AFTER_COLON:
         m_headerState = HeaderState::VALUE;
-        m_start = m_curPos;
+        m_parseStart = m_curPos;
         break;
     case HeaderState::VALUE:
         if (c == '\r') {
@@ -193,11 +213,14 @@ void HttpRequest::ParseHeader(const char c) {
              * 每个头部字段包含一个不区分大小写的字段名，后面跟一个冒号(":")、可选的前导空格(optional leading
              * whitespace)、字段值和可选的尾随空格。但是实际开发一般只有冒号后面有一个固定空格，所以遇到其他情况就直接当作错误处理了
              */
-            curValue = std::string(m_start, m_curPos - m_start);
+            curValue = std::string(m_parseStart, m_curPos - m_parseStart);
             if (curKey == "Content-Length") {
                 m_contentLength = std::stoi(curValue);
             }
             AddHeader(curKey, curValue);
+            if (curKey == "Connection" && curValue == "keep-alive") {
+                m_isKeepAlive = true;
+            }
             m_headerState = HeaderState::CR;
         }
         break;
@@ -213,7 +236,7 @@ void HttpRequest::ParseHeader(const char c) {
             m_headerState = HeaderState::END_CR;
         } else {
             m_headerState = HeaderState::KEY;
-            m_start = m_curPos;
+            m_parseStart = m_curPos;
         }
         break;
     case HeaderState::END_CR:
@@ -223,6 +246,7 @@ void HttpRequest::ParseHeader(const char c) {
             } else {
                 m_parseState = HttpParseState::FINISH;
             }
+            m_end = m_curPos + 1;
         } else {
             m_parseState = HttpParseState::ERROR;
         }
@@ -236,5 +260,6 @@ void HttpRequest::ParseBody(const char c) {
     m_body.push_back(c);
     if (m_body.size() == static_cast<size_t>(m_contentLength)) {
         m_parseState = HttpParseState::FINISH;
+        m_end = m_curPos + 1;
     }
 }

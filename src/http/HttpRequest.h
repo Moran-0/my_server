@@ -25,7 +25,7 @@ class HttpRequest {
     HttpRequest();
     ~HttpRequest() = default;
 
-    bool Parse(std::string& buffer);
+    int Parse(const std::string& buffer);
     /**
      * 设置HTTP方法，支持GET、POST、HEAD、PUT、DELETE、CONNECT、OPTIONS、TRACE和PATCH方法，如果传入的method字符串不合法，则将HTTP方法设置为INVALID
      */
@@ -63,6 +63,13 @@ class HttpRequest {
     const std::string& GetBody() const {
         return m_body;
     }
+    bool IsFinish() const {
+        return m_parseState == HttpParseState::FINISH;
+    }
+    bool IsKeepAlive() const {
+        return m_isKeepAlive;
+    }
+    void Reset();
 
   private:
     HttpMethod m_method;
@@ -74,11 +81,14 @@ class HttpRequest {
     std::string m_body;
     int m_contentLength;
     std::unordered_map<std::string, std::string> m_postParameters;
+    bool m_isKeepAlive;
     HttpParseState m_parseState;
     LineState m_lineState;
     HeaderState m_headerState;
-    const char* m_start;
+    const char* m_parseStart;
     const char* m_curPos;
+    const char* m_start;
+    const char* m_end;
 
     void SetMethod(const std::string_view& method);
     void SetVersion(const std::string_view& version);
@@ -102,7 +112,7 @@ class HttpRequest {
     void ParseRequestLine(const char c);
     void ParseHeader(const char c);
     void ParseBody(const char c);
-
+    // todo
     void ParsePath();
     void ParsePost();
     void ParseFromUrlencoded();

@@ -47,3 +47,7 @@ void Buffer::SetBuf(const char *_buf)
     buf.clear();
     buf.append(_buf);
 }
+
+void Buffer::Erase(size_t index, size_t len) {
+    buf.erase(index, len);
+}
