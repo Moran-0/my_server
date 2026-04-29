@@ -72,7 +72,7 @@ void HttpConnect::HandleRequest() {
             break;
         }
         if (parsed == 0) {
-            cout << "Http request is incomplete, continue reading...\n";
+            cout << "Http request is incomplete, wait left data...\n";
             break;
         }
         if (m_request.IsFinish()) {
@@ -82,7 +82,7 @@ void HttpConnect::HandleRequest() {
             }
             m_request.Reset();
         } else {
-            cout << "Http request is incomplete, continue reading...\n";
+            cout << "Http request is incomplete, wait left data...\n";
         }
         m_readBuffer->Erase(0, parsed); // 支持半包和粘包请求，解析完一部分就从缓冲区删除掉，继续读取剩余部分
     }
@@ -96,16 +96,16 @@ void HttpConnect::HandleError(int errorNum, std::string errorMsg) {
     errorMsg = " " + errorMsg;
     std::string body_buff;
     std::string header_buff;
-    body_buff += "<html><title>哎~出错了</title>";
+    body_buff += "<html><title>Error!!!</title>";
     body_buff += "<body bgcolor=\"ffffff\">";
     body_buff += std::to_string(errorNum) + errorMsg;
-    body_buff += "<hr><em> LinYa's Web Server</em>\n</body></html>";
+    body_buff += "<hr><em> Moran's Web Server</em>\n</body></html>";
 
     header_buff += "HTTP/1.1 " + std::to_string(errorNum) + errorMsg + "\r\n";
     header_buff += "Content-Type: text/html\r\n";
     header_buff += "Connection: Close\r\n";
     header_buff += "Content-Length: " + std::to_string(body_buff.size()) + "\r\n";
-    header_buff += "Server: LinYa's Web Server\r\n";
+    header_buff += "Server: Moran's Web Server\r\n";
     header_buff += "\r\n";
     std::string response = header_buff + body_buff;
     SetSendBuffer(response.c_str());

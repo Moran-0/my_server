@@ -8,7 +8,7 @@ HttpRequest::HttpRequest()
 
 int HttpRequest::Parse(const std::string& buffer) {
     if (buffer.empty()) {
-        return -1;
+        return 0;
     }
     const char* ptr = buffer.c_str();
     m_start = m_parseStart = m_end = ptr;

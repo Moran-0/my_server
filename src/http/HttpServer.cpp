@@ -23,6 +23,7 @@ HttpServer::HttpServer() {
     m_acceptor->SetNewConnectionCallback([this](int sock_fd) { this->CreateConnection(sock_fd); });
     int size = std::thread::hardware_concurrency();
     m_subReactorsPool = std::make_unique<EventLoopThreadPool>(m_mainReactor.get(), size);
+    m_requestCallback = [this](const std::shared_ptr<HttpConnect>& conn) { this->OnRequest(conn); };
 }
 
 void HttpServer::start() {
@@ -64,7 +65,7 @@ void HttpServer::CreateConnection(int sock_fd) {
 
 void HttpServer::OnRequest(const std::shared_ptr<HttpConnect>& conn) {
     auto request = conn->GetRequest();
-    HttpResponse response(request.IsKeepAlive());
+    HttpResponse response(!request.IsKeepAlive());
     response.SetStatusCode(HttpResponse::K200K);
     response.SetStatusMessage("OK");
     response.SetContentType("text/html");

@@ -8,3 +8,7 @@ target_link_libraries(StressTest PRIVATE pine)
 
 add_executable(HttpParseTest HttpParseTest.cpp)
 target_link_libraries(HttpParseTest PRIVATE pine)
+
+add_executable(HttpServerTest HttpServerTest.cpp)
+target_link_libraries(HttpServerTest PRIVATE pine)
+
