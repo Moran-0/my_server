@@ -4,6 +4,7 @@
 #include "Buffer.h"
 #include "HttpRequest.h"
 #include "Channel.h"
+#include "Timer.h"
 class EventLoop;
 
 class HttpConnect : public NoCopy, public NoMove, public std::enable_shared_from_this<HttpConnect> {
@@ -23,6 +24,7 @@ class HttpConnect : public NoCopy, public NoMove, public std::enable_shared_from
     std::unique_ptr<Buffer> m_writeBuffer;
     State m_state;
     HttpRequest m_request;
+    std::weak_ptr<Timer> m_timer; // 连接对应的定时器，定时器过期时关闭连接
 
   public:
     HttpConnect(EventLoop* _loop, int sock_fd);
@@ -54,6 +56,11 @@ class HttpConnect : public NoCopy, public NoMove, public std::enable_shared_from
     void HandleClose();                                   // 处理关闭请求
     void HandleRequest();                                 // 处理HTTP请求
     void HandleError(int errorNum, std::string errorMsg); // 处理HTTP请求错误
+
+    void LinkTimer(const std::shared_ptr<Timer>& timer) {
+        m_timer = timer;
+    }
+    void SeperateTimer(); // 分离定时器
 
     State GetState() {
         return m_state;

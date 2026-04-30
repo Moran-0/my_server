@@ -64,8 +64,7 @@ void Epoll::remove(Channel *channel)
     channel->setInEpoll(false);
 }
 
-void Epoll::updateChannel(Channel *channel)
-{
+void Epoll::updateChannel(Channel* channel) {
     int fd = channel->getFd();
     epoll_event event;
     bzero(&event, sizeof(event));

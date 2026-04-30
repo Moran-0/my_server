@@ -13,6 +13,7 @@ EventLoop::EventLoop() : m_ep(nullptr), m_quit(false), m_callingTodoList(false),
     m_wakeupChannel = std::make_unique<Channel>(this, m_wakeupFd);
     m_wakeupChannel->setReadCallback([this]() { this->HandleRead(); });
     m_wakeupChannel->enableRead();
+    m_timerManager = std::make_unique<TimerManager>();
 }
 
 EventLoop::~EventLoop() {
@@ -22,14 +23,16 @@ EventLoop::~EventLoop() {
 
 void EventLoop::loop() {
     while (!m_quit) {
-        auto chs = m_ep->poll();
+        auto timeout = m_timerManager->GetNextTimeOut(); // 动态获取最近超时时间
+        auto chs = m_ep->poll(timeout);
         for (auto &channel_event : chs)
         {
-            auto ch = channel_event.first;
+            auto* ch = channel_event.first;
             auto ready = channel_event.second;
             ch->HandleEvent(ready);
         }
         DoTodoList();
+        m_timerManager->HandleExpiredEvent(); // 处理定时任务
     }
 }
 
@@ -37,8 +40,7 @@ void EventLoop::quit() {
     m_quit = true;
 }
 
-void EventLoop::updateChannel(Channel *ch)
-{
+void EventLoop::updateChannel(Channel* ch) {
     m_ep->updateChannel(ch);
 }
 
@@ -92,4 +94,17 @@ void EventLoop::QueueFunc(const std::function<void()>& func) {
             throw std::runtime_error("EventLoop::QueueFunc() - write error");
         }
     }
+}
+
+void EventLoop::AddScheduledTask(
+    int timeout,
+    std::function<void()> task,
+    std::function<void(const std::shared_ptr<Timer>&)> timerCallback) {
+    // 使用RunOneFunc避免m_timeManager产生数据竞争
+    RunOneFunc([this, timeout, task = std::move(task), timerCallback = std::move(timerCallback)]() mutable {
+        auto timer = m_timerManager->AddTimer(timeout, std::move(task));
+        if (timerCallback) {
+            timerCallback(timer);
+        }
+    });
 }

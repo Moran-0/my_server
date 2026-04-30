@@ -1,13 +1,13 @@
 #include "HttpConnect.h"
 #include "EventLoop.h"
 #include "HttpResponse.h"
+#include "HttpConfig.h"
 
 #include <sys/socket.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <cstring>
 #include <iostream>
-#include "HttpConnect.h"
 
 using std::cout;
 using std::endl;
@@ -61,6 +61,9 @@ void HttpConnect::HandleClose() {
 
 void HttpConnect::HandleRequest() {
     ReadNonBlocking();
+    if (auto timer = m_timer.lock()) {
+        timer->Update(HTTP_DEFAULT_TIMEOUT);
+    }
     while (true) {
         auto parsed = m_request.Parse(m_readBuffer->str());
         if (parsed == -1) {
@@ -110,6 +113,13 @@ void HttpConnect::HandleError(int errorNum, std::string errorMsg) {
     std::string response = header_buff + body_buff;
     SetSendBuffer(response.c_str());
     WriteNonBlocking();
+}
+
+void HttpConnect::SeperateTimer() {
+    if (auto timer = m_timer.lock()) {
+        timer->ClearCallback(); // 分离定时器，清除定时器的回调函数，避免定时器过期时错误地关闭连接
+        m_timer.reset();
+    }
 }
 
 void HttpConnect::ReadNonBlocking() {

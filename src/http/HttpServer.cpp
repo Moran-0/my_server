@@ -7,6 +7,7 @@
 #include "Buffer.h"
 #include "ThreadPool.h"
 #include "HttpResponse.h"
+#include "HttpConfig.h"
 
 #include <iostream>
 #include <fcntl.h>
@@ -14,7 +15,6 @@
 #include <unistd.h>
 #include <functional>
 
-#define READ_BUFFER 1024
 using std::cout;
 using std::endl;
 HttpServer::HttpServer() {
@@ -58,9 +58,16 @@ void HttpServer::CreateConnection(int sock_fd) {
     connect->SetOnCloseCallback([this](const std::shared_ptr<HttpConnect>& conn) { this->CloseConnection(conn); });
     connect->SetOnRequestCallback(m_requestCallback);
     connect->SetOnConnectCallback(m_connectCallback);
-    connect->EstablishConnection();
-    std::lock_guard<std::mutex> lock(m_connections_mtx);
-    m_connections[sock_fd] = connect;
+    {
+        std::lock_guard<std::mutex> lock(m_connections_mtx);
+        m_connections[sock_fd] = connect;
+    }
+    work_loop->RunOneFunc([work_loop, connect]() {
+        connect->EstablishConnection();
+        work_loop->AddScheduledTask(
+            HTTP_DEFAULT_TIMEOUT, [connect]() { connect->HandleClose(); },
+            [connect](const std::shared_ptr<Timer>& timer) { connect->LinkTimer(timer); });
+    });
 }
 
 void HttpServer::OnRequest(const std::shared_ptr<HttpConnect>& conn) {
@@ -80,6 +87,9 @@ void HttpServer::OnRequest(const std::shared_ptr<HttpConnect>& conn) {
 
     conn->Send(response.message());
     if (!request.IsKeepAlive()) {
-        conn->HandleClose();
+        // conn->HandleClose();
+        // 效果同上，因为OnRequest本身就是在连接所在线程调用，下述代码只是让线程边界更稳，两者皆可
+        auto* connLoop = conn->GetLoop();
+        connLoop->RunOneFunc([conn]() { conn->HandleClose(); });
     }
 }
