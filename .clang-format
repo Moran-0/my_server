@@ -4,6 +4,7 @@ TabWidth: 4
 UseTab: Never
 ColumnLimit: 150
 BreakBeforeBraces: Attach
+BreakTemplateDeclarations: Yes
 AllowShortIfStatementsOnASingleLine: Never
 AllowShortLoopsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: Empty

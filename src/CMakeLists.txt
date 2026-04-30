@@ -18,6 +18,7 @@ target_include_directories(pine
         ${CMAKE_CURRENT_SOURCE_DIR}/tcp
         ${CMAKE_CURRENT_SOURCE_DIR}/http
         ${CMAKE_CURRENT_SOURCE_DIR}/timer
+        ${CMAKE_CURRENT_SOURCE_DIR}/log
 )
 
 target_link_libraries(pine

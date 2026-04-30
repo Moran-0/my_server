@@ -12,3 +12,5 @@ target_link_libraries(HttpParseTest PRIVATE pine)
 add_executable(HttpServerTest HttpServerTest.cpp)
 target_link_libraries(HttpServerTest PRIVATE pine)
 
+add_executable(LogTest LogTest.cpp)
+target_link_libraries(LogTest PRIVATE pine)
