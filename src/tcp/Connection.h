@@ -77,5 +77,6 @@ inline TcpConnection::State TcpConnection::GetState() {
 }
 
 inline void TcpConnection::SetSendBuffer(const char* str) {
-    m_writeBuffer->SetBuf(str);
+    m_writeBuffer->RetrieveAll();
+    m_writeBuffer->Append(str);
 }

@@ -46,7 +46,7 @@ void TcpConnection::Read() {
     if (m_state != State::Connected) {
         throw std::runtime_error("当前未建立连接");
     }
-    m_readBuffer->Clear();
+    m_readBuffer->RetrieveAll();
     ReadNonBlocking();
 }
 
@@ -55,7 +55,7 @@ void TcpConnection::Write() {
         throw std::runtime_error("当前未建立连接");
     }
     WriteNonBlocking();
-    m_writeBuffer->Clear();
+    m_writeBuffer->RetrieveAll();
 }
 
 /// @brief 处理接收到的消息
@@ -75,8 +75,8 @@ void TcpConnection::HandleClose() {
 }
 
 bool TcpConnection::send(int sockfd) {
-    const char* buf = m_readBuffer->c_str();
-    int data_size = static_cast<int>(m_readBuffer->size());
+    const char* buf = m_readBuffer->Peek();
+    int data_size = static_cast<int>(m_readBuffer->ReadableBytes());
     int data_left = data_size;
     while (data_left > 0)
     {
@@ -108,7 +108,7 @@ void TcpConnection::ReadNonBlocking() {
         auto byte_read = read(sockfd, buf, READ_BUFFER);
         if (byte_read > 0) {
             cout << "Get messages from " << sockfd << ":" << buf << '\n';
-            m_readBuffer->append(buf, byte_read);
+            m_readBuffer->Append(buf, byte_read);
         } else if (byte_read == -1 && errno == EINTR) {
             // 客户端正常中断
             cout << "contineu reading..." << '\n';
@@ -132,10 +132,10 @@ void TcpConnection::ReadNonBlocking() {
 /// @brief 非阻塞IO写入
 void TcpConnection::WriteNonBlocking() {
     int sockfd = m_connectedFd;
-    auto data_size = m_writeBuffer->size();
+    auto data_size = m_writeBuffer->ReadableBytes();
     auto data_left = data_size; // 未发送的数据大小
     char buf[data_size];
-    std::copy_n(m_writeBuffer->c_str(), data_size, buf);
+    std::copy_n(m_writeBuffer->Peek(), data_size, buf);
     while (data_left > 0) {
         auto byte_writen = write(sockfd, buf + data_size - data_left, data_left);
         if (byte_writen == -1 && errno == EINTR) {

@@ -17,12 +17,14 @@ int main()
     Socket clnt_sock;
     InetAddress serv_addr("127.0.0.1", 8888);
     clnt_sock.connect(serv_addr);
-
+    std::string message;
     while (true)
     {
+        message.clear();
+        std::getline(std::cin, message);
         Buffer sendBuffer, readBuffer;
-        sendBuffer.Getline();
-        size_t write_bytes = write(clnt_sock.getFd(), sendBuffer.c_str(), sendBuffer.size());
+        sendBuffer.Append(message);
+        size_t write_bytes = write(clnt_sock.getFd(), sendBuffer.Peek(), sendBuffer.ReadableBytes());
         if (write_bytes == -1)
         {
             printf("socket already disconnected, can't write any more!\n");
@@ -36,7 +38,7 @@ int main()
             size_t read_bytes = read(clnt_sock.getFd(), buf, sizeof(buf));
             if (read_bytes > 0)
             {
-                readBuffer.append(buf, read_bytes);
+                readBuffer.Append(buf, read_bytes);
             }
             else if (read_bytes == 0)
             {
@@ -47,13 +49,12 @@ int main()
             {
                 errif(true, "socket read error");
             }
-            if (readBuffer.size() >= sendBuffer.size())
-            {
-                cout << "message from server: " << readBuffer.c_str() << endl;
+            if (readBuffer.ReadableBytes() >= sendBuffer.ReadableBytes()) {
+                cout << "message from server: " << readBuffer.Peek() << endl;
                 break;
             }
         }
-        readBuffer.Clear();
+        readBuffer.RetrieveAll();
     }
     return 0;
 }

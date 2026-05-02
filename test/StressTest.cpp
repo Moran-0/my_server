@@ -32,8 +32,8 @@ void oneClient(int msgs, int wait)
     int count = 0;
     while (count < msgs)
     {
-        sendBuffer->SetBuf("I'm client!");
-        ssize_t write_bytes = write(sockfd, sendBuffer->c_str(), sendBuffer->size());
+        sendBuffer->Append("I'm client!");
+        ssize_t write_bytes = write(sockfd, sendBuffer->Peek(), sendBuffer->ReadableBytes());
         if (write_bytes == -1)
         {
             printf("socket already disconnected, can't write any more!\n");

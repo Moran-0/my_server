@@ -78,6 +78,7 @@ class HttpConnect : public NoCopy, public NoMove, public std::enable_shared_from
     void ReadNonBlocking();
     void WriteNonBlocking();
     void SetSendBuffer(const char* str) {
-        m_writeBuffer->SetBuf(str);
+        m_writeBuffer->RetrieveAll();
+        m_writeBuffer->Append(str);
     };
 };

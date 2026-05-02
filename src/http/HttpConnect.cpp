@@ -49,7 +49,7 @@ void HttpConnect::Write() {
         throw std::runtime_error("当前未建立连接");
     }
     WriteNonBlocking();
-    m_writeBuffer->Clear();
+    m_writeBuffer->RetrieveAll();
 }
 
 void HttpConnect::HandleClose() {
@@ -66,12 +66,12 @@ void HttpConnect::HandleRequest() {
         timer->Update(HTTP_DEFAULT_TIMEOUT);
     }
     while (true) {
-        auto parsed = m_request.Parse(m_readBuffer->str());
+        auto parsed = m_request.Parse(m_readBuffer->PeekString());
         if (parsed == -1) {
             LOG_WARN << "Failed to parse http requeset\n";
             m_state = State::Failed;
             m_request.Reset();
-            m_readBuffer->Clear();
+            m_readBuffer->RetrieveAll();
             HandleError(400, "Bad Request");
             break;
         }
@@ -88,7 +88,7 @@ void HttpConnect::HandleRequest() {
         } else {
             LOG_INFO << "Http request is incomplete, wait left data...\n";
         }
-        m_readBuffer->Erase(0, parsed); // 支持半包和粘包请求，解析完一部分就从缓冲区删除掉，继续读取剩余部分
+        m_readBuffer->Retrieve(parsed); // 支持半包和粘包请求，解析完一部分就从缓冲区删除掉，继续读取剩余部分
     }
 }
 
@@ -133,7 +133,7 @@ void HttpConnect::ReadNonBlocking() {
         if (byte_read > 0) {
             // cout << "Get messages from " << sockfd << ":" << buf << '\n';
             LOG_INFO << "Get messages from " << sockfd << ":" << buf << '\n';
-            m_readBuffer->append(buf, byte_read);
+            m_readBuffer->Append(buf, byte_read);
         } else if (byte_read == -1 && errno == EINTR) {
             // 客户端正常中断
             cout << "continue reading..." << '\n';
@@ -157,10 +157,10 @@ void HttpConnect::ReadNonBlocking() {
 
 void HttpConnect::WriteNonBlocking() {
     int sockfd = m_connectedFd;
-    auto data_size = m_writeBuffer->size();
+    auto data_size = m_writeBuffer->ReadableBytes();
     auto data_left = data_size; // 未发送的数据大小
     char buf[data_size];
-    std::copy_n(m_writeBuffer->c_str(), data_size, buf);
+    std::copy_n(m_writeBuffer->Peek(), data_size, buf);
     while (data_left > 0) {
         auto byte_writen = write(sockfd, buf + data_size - data_left, data_left);
         if (byte_writen == -1 && errno == EINTR) {
