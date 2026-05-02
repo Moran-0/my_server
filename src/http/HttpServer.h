@@ -26,7 +26,7 @@ class HttpServer {
     std::function<void(const std::shared_ptr<HttpConnect>&)> m_connectCallback;
 
   public:
-    HttpServer();
+    HttpServer(const char* ip, int port);
     ~HttpServer() = default;
     void start();
     void CloseConnection(const std::shared_ptr<HttpConnect>& conn);

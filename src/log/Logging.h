@@ -17,12 +17,12 @@ class Logger : public NoCopy {
     using FlushFunc = void (*)();
     static void setOutput(OutputFunc);
     static void setFlush(FlushFunc);
+    static const char* FormattedTime();
 
   private:
     class Impl : NoCopy {
       public:
         Impl(const char* sourceFile, LogLevel level, int line);
-        void FormattedTime();
         void Finish();
         LogStream& Stream();
         const char* GetLogLevelName() const;

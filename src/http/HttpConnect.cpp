@@ -2,6 +2,7 @@
 #include "EventLoop.h"
 #include "HttpResponse.h"
 #include "HttpConfig.h"
+#include "Logging.h"
 
 #include <sys/socket.h>
 #include <unistd.h>
@@ -67,7 +68,7 @@ void HttpConnect::HandleRequest() {
     while (true) {
         auto parsed = m_request.Parse(m_readBuffer->str());
         if (parsed == -1) {
-            cout << "Failed to parse http request\n";
+            LOG_WARN << "Failed to parse http requeset\n";
             m_state = State::Failed;
             m_request.Reset();
             m_readBuffer->Clear();
@@ -75,17 +76,17 @@ void HttpConnect::HandleRequest() {
             break;
         }
         if (parsed == 0) {
-            cout << "Http request is incomplete, wait left data...\n";
+            LOG_INFO << "Http request is incomplete, wait left data...\n";
             break;
         }
         if (m_request.IsFinish()) {
-            cout << "Successfully parsed http request\n";
+            LOG_INFO << "Successfully parsed http request\n";
             if (m_onRequest) {
                 m_onRequest(shared_from_this());
             }
             m_request.Reset();
         } else {
-            cout << "Http request is incomplete, wait left data...\n";
+            LOG_INFO << "Http request is incomplete, wait left data...\n";
         }
         m_readBuffer->Erase(0, parsed); // 支持半包和粘包请求，解析完一部分就从缓冲区删除掉，继续读取剩余部分
     }
@@ -130,22 +131,24 @@ void HttpConnect::ReadNonBlocking() {
         memset(buf, 0, READ_BUFFER); // 性能更优
         auto byte_read = read(sockfd, buf, READ_BUFFER);
         if (byte_read > 0) {
-            cout << "Get messages from " << sockfd << ":" << buf << '\n';
+            // cout << "Get messages from " << sockfd << ":" << buf << '\n';
+            LOG_INFO << "Get messages from " << sockfd << ":" << buf << '\n';
             m_readBuffer->append(buf, byte_read);
         } else if (byte_read == -1 && errno == EINTR) {
             // 客户端正常中断
-            cout << "contineu reading..." << '\n';
+            cout << "continue reading..." << '\n';
             continue;
         } else if (byte_read == -1 && ((errno == EAGAIN) || (errno == EWOULDBLOCK))) {
             // 非阻塞IO表示数据全部读取完毕
-            cout << "Finish reading once" << '\n';
+            LOG_INFO << "Finish reading once" << '\n';
             break;
         } else if (byte_read == 0) { // EOF,客户端断开连接
-            cout << "EOF, client " << sockfd << " disconnected!" << '\n';
+            LOG_ERROR << "EOF, client " << sockfd << " disconnected!" << '\n';
             HandleClose();
             break;
         } else {
-            cout << "Other error on client fd " << sockfd << '\n';
+            // cout << "Other error on client fd " << sockfd << '\n';
+            LOG_ERROR << "Other error on client fd " << sockfd << '\n';
             m_state = State::Closed;
             break;
         }
@@ -161,14 +164,15 @@ void HttpConnect::WriteNonBlocking() {
     while (data_left > 0) {
         auto byte_writen = write(sockfd, buf + data_size - data_left, data_left);
         if (byte_writen == -1 && errno == EINTR) {
-            cout << "continue writing...\n";
+            LOG_INFO << "continue writing...\n";
             continue;
         }
         if (byte_writen == -1 && errno == EAGAIN) { // 资源暂时不可用，请稍后重试
+            LOG_WARN << "Resource temporarily unavailable, please try again later\n";
             break;
         }
         if (byte_writen == -1) {
-            cout << "Other error on client fd " << sockfd << '\n';
+            LOG_ERROR << "Other error on client fd " << sockfd << '\n';
             HandleClose();
             break;
         }

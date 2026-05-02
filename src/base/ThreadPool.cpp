@@ -1,7 +1,10 @@
 #include "ThreadPool.h"
+#include "Logging.h"
+
 #include <exception>
 #include <stdexcept>
 #include <iostream>
+#include <sstream>
 
 ThreadPool::ThreadPool(int size) : m_stop(false) {
     if (size < 0) {
@@ -21,7 +24,10 @@ ThreadPool::ThreadPool(int size) : m_stop(false) {
                     task = m_tasks.front();
                     m_tasks.pop();
                 }
-                std::cout << "Current thread id:" << std::this_thread::get_id() << '\n';
+                // std::cout << "Current thread id:" << std::this_thread::get_id() << '\n';
+                std::ostringstream oss;
+                oss << std::this_thread::get_id();
+                LOG_INFO << "Current thread id: " << oss.str() << '\n';
                 task();
             }
         }));

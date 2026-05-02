@@ -8,6 +8,7 @@
 #include "ThreadPool.h"
 #include "HttpResponse.h"
 #include "HttpConfig.h"
+#include "Logging.h"
 
 #include <iostream>
 #include <fcntl.h>
@@ -17,9 +18,9 @@
 
 using std::cout;
 using std::endl;
-HttpServer::HttpServer() {
+HttpServer::HttpServer(const char* ip, int port) {
     m_mainReactor = std::make_unique<EventLoop>();
-    m_acceptor = std::make_unique<Acceptor>(m_mainReactor.get(), "127.0.0.1", 8888);
+    m_acceptor = std::make_unique<Acceptor>(m_mainReactor.get(), ip, port);
     m_acceptor->SetNewConnectionCallback([this](int sock_fd) { this->CreateConnection(sock_fd); });
     int size = std::thread::hardware_concurrency();
     m_subReactorsPool = std::make_unique<EventLoopThreadPool>(m_mainReactor.get(), size);
@@ -28,19 +29,19 @@ HttpServer::HttpServer() {
 
 void HttpServer::start() {
     m_subReactorsPool->Start(); // 创建并启动线程池，创建subReactor线程，并让每个subReactor线程的EventLoop开始事件循环
-    cout << "HttpServer " << " Start!" << '\n';
+    LOG_INFO << "HttpServer " << " Start!" << '\n';
     m_mainReactor->loop();
 }
 
 void HttpServer::CloseConnection(const std::shared_ptr<HttpConnect>& conn) {
-    cout << "[CloseConnection] Close connection in thread " << CurrentThread::Tid() << '\n';
+    LOG_INFO << "[CloseConnection] Close connection in thread " << CurrentThread::Tid() << '\n';
     m_mainReactor->RunOneFunc([this, conn]() { this->CloseConnectionInLoop(conn); });
 }
 
 /// @brief 在loop当前线程中关闭连接，移除连接对象，并将该连接所属channel从EventLoop中移除。由于loop所属线程唯一，因此不需要加锁保护m_connections
 /// @param conn 连接对象
 void HttpServer::CloseConnectionInLoop(const std::shared_ptr<HttpConnect>& conn) {
-    cout << "[CloseConnectionInLoop] Close connection in thread " << CurrentThread::Tid() << '\n';
+    LOG_INFO << "[CloseConnectionInLoop] Close connection in thread " << CurrentThread::Tid() << '\n';
     m_connections.erase(conn->GetFd());
     // 将该连接所属channel从EventLoop中移除
     auto* conn_loop = conn->GetLoop();

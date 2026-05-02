@@ -1,8 +1,10 @@
 #include "Logging.h"
 #include <algorithm>
+#include <array>
 #include <atomic>
-#include <cstdlib>
+#include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <ctime>
 #include <limits>
 
@@ -92,11 +94,13 @@ Logger::~Logger() {
     const auto len = static_cast<int>(std::min(buf.Len(), static_cast<buffer_size>(std::numeric_limits<int>::max())));
     output(buf.Data(), len);
 
-    auto* flush = g_flush.load(std::memory_order_acquire);
-    if (flush == nullptr) {
-        flush = defaultFlush;
+    if (m_impl.GetLevel() >= LogLevel::ERROR) {
+        auto* flush = g_flush.load(std::memory_order_acquire);
+        if (flush == nullptr) {
+            flush = defaultFlush;
+        }
+        flush();
     }
-    flush();
 
     if (m_impl.GetLevel() == LogLevel::FATAL) {
         abort();
@@ -107,25 +111,25 @@ LogStream& Logger::Stream() {
     return m_impl.Stream();
 }
 
+const char* Logger::FormattedTime() {
+    auto now = std::chrono::system_clock::now();
+    auto tt = std::chrono::system_clock::to_time_t(now);
+    std::tm tm{};
+    if (localtime_r(&tt, &tm) == nullptr) {
+        return "00000000 00:00:00 ";
+    }
+    thread_local static std::array<char, 32> buf{};
+    auto len = std::strftime(buf.data(), buf.size(), "%Y%m%d %H:%M:%S ", &tm);
+    if (len == 0) {
+        return "00000000 00:00:00 ";
+    }
+    return buf.data();
+}
+
 // ===================== Logger::Impl =====================
 
 Logger::Impl::Impl(const char* sourceFile, LogLevel level, int line) : m_sourceFile(SourceFileName(sourceFile)), m_line(line), m_level(level) {
-    FormattedTime();
-}
-
-void Logger::Impl::FormattedTime() {
-    time_t now = time(nullptr);
-    struct tm tm_time;
-    if (localtime_r(&now, &tm_time) == nullptr) {
-        m_stream << "00000000 00:00:00 ";
-        return;
-    }
-    char buf[32];
-    int len = snprintf(buf, sizeof(buf), "%04d%02d%02d %02d:%02d:%02d ", tm_time.tm_year + 1900, tm_time.tm_mon + 1, tm_time.tm_mday, tm_time.tm_hour,
-                       tm_time.tm_min, tm_time.tm_sec);
-    if (len > 0) {
-        m_stream.Append(buf, static_cast<buffer_size>(len));
-    }
+    m_stream << FormattedTime();
 }
 
 void Logger::Impl::Finish() {

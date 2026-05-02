@@ -3,6 +3,8 @@
 #include "Channel.h"
 #include "EventLoop.h"
 #include "InetAddress.h"
+#include "Logging.h"
+
 #include <iostream>
 
 using std::cout;
@@ -23,8 +25,8 @@ Acceptor::Acceptor(EventLoop* _loop, const char* ip, const int port) {
 void Acceptor::AcceptConnection() {
     InetAddress clnt_addr;
     int clnt_fd = m_sock->accept(clnt_addr);
-    cout << "Connect to client " << clnt_fd << "IP:" << inet_ntoa(clnt_addr.getAddr().sin_addr) << " PORT:" << clnt_addr.getAddr().sin_port
-         << '\n';
+    LOG_INFO << "Connect to client " << clnt_fd << "IP:" << inet_ntoa(clnt_addr.getAddr().sin_addr) << " PORT:" << clnt_addr.getAddr().sin_port
+             << '\n';
     if (newConnectionCallback) {
         newConnectionCallback(clnt_fd);
     }
