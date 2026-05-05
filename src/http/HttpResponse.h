@@ -10,6 +10,8 @@ class HttpResponse {
         K400BadRequest = 400,
         K403Forbidden = 403,
         K404NotFound = 404,
+        K405MethodNotAllowed = 405,
+        K413PayloadTooLarge = 413,
         K500internalServerError = 500
     };
     HttpResponse(bool close_connection);

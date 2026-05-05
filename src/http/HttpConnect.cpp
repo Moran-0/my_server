@@ -16,6 +16,88 @@ using std::endl;
 constexpr int READ_BUFFER = 1024;
 // constexpr int WRITE_BUFFER = 4096;
 
+namespace {
+std::string ErrorPage(int errorNum, const std::string& errorMsg) {
+    const auto code = std::to_string(errorNum);
+    return R"(<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>)" + code + " " + errorMsg + R"(</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --text: #17202e;
+      --muted: #667085;
+      --line: #d9dee8;
+      --accent: #2f6fed;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 32px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    main {
+      width: min(560px, 100%);
+      padding: 36px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 18px 44px rgba(23, 32, 46, 0.08);
+    }
+    .code {
+      margin: 0 0 14px;
+      color: var(--accent);
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 6vw, 44px);
+      line-height: 1.08;
+      letter-spacing: 0;
+    }
+    p {
+      margin: 16px 0 0;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+    a {
+      display: inline-block;
+      margin-top: 26px;
+      color: var(--accent);
+      font-weight: 700;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="code">HTTP )" + code + R"(</p>
+    <h1>)" + errorMsg + R"(</h1>
+    <p>The server understood the request, but could not complete it in its current form.</p>
+    <a href="/">Return home</a>
+  </main>
+</body>
+</html>)";
+}
+} // namespace
+
 HttpConnect::HttpConnect(EventLoop* _loop, int sock_fd) : m_loop(_loop), m_connectedFd(sock_fd), m_closeAfterWrite(false) {
     fcntl(m_connectedFd, F_SETFL, fcntl(m_connectedFd, F_GETFL) | O_NONBLOCK); // 设置非阻塞IO
     m_channel = std::make_unique<Channel>(m_loop, m_connectedFd);
@@ -97,16 +179,12 @@ void HttpConnect::HandleError(int errorNum, std::string errorMsg) {
         m_onError(shared_from_this());
         return;
     }
-    errorMsg = " " + errorMsg;
     std::string body_buff;
     std::string header_buff;
-    body_buff += "<html><title>Error!!!</title>";
-    body_buff += "<body bgcolor=\"ffffff\">";
-    body_buff += std::to_string(errorNum) + errorMsg;
-    body_buff += "<hr><em> Moran's Web Server</em>\n</body></html>";
+    body_buff = ErrorPage(errorNum, errorMsg);
 
-    header_buff += "HTTP/1.1 " + std::to_string(errorNum) + errorMsg + "\r\n";
-    header_buff += "Content-Type: text/html\r\n";
+    header_buff += "HTTP/1.1 " + std::to_string(errorNum) + " " + errorMsg + "\r\n";
+    header_buff += "Content-Type: text/html; charset=utf-8\r\n";
     header_buff += "Connection: Close\r\n";
     header_buff += "Content-Length: " + std::to_string(body_buff.size()) + "\r\n";
     header_buff += "Server: Moran's Web Server\r\n";

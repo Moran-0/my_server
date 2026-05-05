@@ -134,6 +134,7 @@ void HttpRequest::Reset() {
     m_body.clear();
     m_contentLength = 0;
     m_postParameters.clear();
+    m_isKeepAlive = false;
     m_parseState = HttpParseState::REQUEST_LINE;
     m_lineState = LineState::METHOD;
     m_headerState = HeaderState::KEY;
@@ -220,6 +221,8 @@ void HttpRequest::ParseHeader(const char c) {
             AddHeader(curKey, curValue);
             if (curKey == "Connection" && curValue == "keep-alive") {
                 m_isKeepAlive = true;
+            } else if (curKey == "Connection" && curValue == "close") {
+                m_isKeepAlive = false;
             }
             m_headerState = HeaderState::CR;
         }

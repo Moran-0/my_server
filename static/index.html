@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Moran's Web Server</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --text: #17202e;
+      --muted: #667085;
+      --line: #d9dee8;
+      --accent: #2f6fed;
+      --accent-soft: #eaf1ff;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .page {
+      min-height: 100vh;
+      display: grid;
+      align-items: center;
+      padding: 48px 24px;
+    }
+    main {
+      width: min(920px, 100%);
+      margin: 0 auto;
+      display: grid;
+      gap: 28px;
+    }
+    .hero {
+      padding: clamp(32px, 7vw, 64px);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 18px 44px rgba(23, 32, 46, 0.08);
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 22px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #21a67a;
+    }
+    h1 {
+      max-width: 760px;
+      margin: 0;
+      font-size: clamp(38px, 8vw, 76px);
+      line-height: 0.98;
+      letter-spacing: 0;
+    }
+    .lead {
+      max-width: 640px;
+      margin: 24px 0 0;
+      color: var(--muted);
+      font-size: clamp(17px, 2vw, 20px);
+      line-height: 1.7;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .item {
+      min-height: 120px;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    .item strong {
+      display: block;
+      margin-bottom: 10px;
+      font-size: 16px;
+    }
+    .item span {
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    @media (max-width: 760px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      .hero {
+        padding: 32px 24px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <main>
+      <section class="hero">
+        <p class="eyebrow"><span class="dot"></span> Server is running</p>
+        <h1>Moran's Web Server</h1>
+        <p class="lead">A lightweight C++ web server for serving static pages, images, audio, and other everyday web assets.</p>
+      </section>
+      <section class="grid" aria-label="Server features">
+        <div class="item">
+          <strong>Static files</strong>
+          <span>HTML, CSS, JavaScript, images, audio, and binary assets from the static root.</span>
+        </div>
+        <div class="item">
+          <strong>HTTP routing</strong>
+          <span>Requests are parsed, mapped to files, and returned with matching response headers.</span>
+        </div>
+        <div class="item">
+          <strong>Nonblocking I/O</strong>
+          <span>The event loop keeps connections responsive while data is read and written.</span>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

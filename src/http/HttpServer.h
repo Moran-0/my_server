@@ -25,6 +25,8 @@ class HttpServer {
     std::function<void(const std::shared_ptr<HttpConnect>&)> m_requestCallback;
     std::function<void(const std::shared_ptr<HttpConnect>&)> m_connectCallback;
 
+    std::string m_staticRoot;
+
   public:
     HttpServer(const char* ip, int port);
     ~HttpServer() = default;
@@ -38,7 +40,11 @@ class HttpServer {
     void SetConnectCallback(std::function<void(const std::shared_ptr<HttpConnect>&)> cb) {
         m_connectCallback = std::move(cb);
     }
+    void SetStaticRoot(std::string root) {
+        m_staticRoot = std::move(root);
+    }
 
   private:
     void OnRequest(const std::shared_ptr<HttpConnect>& conn);
+    bool ServeStaticFile(const std::shared_ptr<HttpConnect>& conn);
 };

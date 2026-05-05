@@ -5,7 +5,7 @@
 
 namespace {
 constexpr int kInitialSize = 1024;
-constexpr int kMaxSize = 1024 * 1024;
+constexpr int kMaxSize = 64 * 1024 * 1024;
 constexpr int kPrePendIndex = 8;
 } // namespace
 
