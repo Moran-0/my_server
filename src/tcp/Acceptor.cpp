@@ -18,8 +18,8 @@ Acceptor::Acceptor(EventLoop* _loop, const char* ip, const int port) {
     // m_sock->setNonBlocking(); // 处理连接的时间较少，采用阻塞式socket
     m_channel = std::make_unique<Channel>(_loop, m_sock->getFd());
     std::function<void()> cb = [this]() { this->AcceptConnection(); };
-    m_channel->setReadCallback(cb);
-    m_channel->enableRead();
+    m_channel->SetReadCallback(cb);
+    m_channel->EnableRead();
 }
 
 void Acceptor::AcceptConnection() {

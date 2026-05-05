@@ -11,8 +11,8 @@ EventLoop::EventLoop() : m_ep(nullptr), m_quit(false), m_callingTodoList(false),
     m_ep = std::make_unique<Epoll>();
     m_wakeupFd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
     m_wakeupChannel = std::make_unique<Channel>(this, m_wakeupFd);
-    m_wakeupChannel->setReadCallback([this]() { this->HandleRead(); });
-    m_wakeupChannel->enableRead();
+    m_wakeupChannel->SetReadCallback([this]() { this->HandleRead(); });
+    m_wakeupChannel->EnableRead();
     m_timerManager = std::make_unique<TimerManager>();
 }
 

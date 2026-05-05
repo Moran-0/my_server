@@ -55,32 +55,28 @@ std::vector<Epoll::ChannelEvent> Epoll::poll(int timeout)
 
 void Epoll::remove(Channel *channel)
 {
-    if (channel == nullptr || !channel->getInEpoll())
-    {
+    if (channel == nullptr || !channel->GetInEpoll()) {
         return;
     }
-    int fd = channel->getFd();
+    int fd = channel->GetFd();
     if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, nullptr) == -1) {
         LOG_ERROR << "Failed to remove fd " << fd << " from epoll instance" << '\n';
     }
-    channel->setInEpoll(false);
+    channel->SetInEpoll(false);
 }
 
 void Epoll::updateChannel(Channel* channel) {
-    int fd = channel->getFd();
+    int fd = channel->GetFd();
     epoll_event event;
     bzero(&event, sizeof(event));
     event.data.ptr = channel;
-    event.events = channel->getEvents();
-    if (!channel->getInEpoll())
-    {
+    event.events = channel->GetEvents();
+    if (!channel->GetInEpoll()) {
         if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &event) == -1) {
             LOG_ERROR << "Failed to add fd " << fd << " to epoll instance" << '\n';
         }
-        channel->setInEpoll();
-    }
-    else
-    {
+        channel->SetInEpoll();
+    } else {
         if (epoll_ctl(epoll_fd, EPOLL_CTL_MOD, fd, &event) == -1) {
             LOG_ERROR << "Failed to modify fd " << fd << " in epoll instance" << '\n';
         }

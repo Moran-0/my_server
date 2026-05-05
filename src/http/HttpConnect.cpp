@@ -14,13 +14,14 @@ using std::cout;
 using std::endl;
 
 constexpr int READ_BUFFER = 1024;
-constexpr int WRITE_BUFFER = 4096;
+// constexpr int WRITE_BUFFER = 4096;
 
-HttpConnect::HttpConnect(EventLoop* _loop, int sock_fd) : m_loop(_loop), m_connectedFd(sock_fd) {
+HttpConnect::HttpConnect(EventLoop* _loop, int sock_fd) : m_loop(_loop), m_connectedFd(sock_fd), m_closeAfterWrite(false) {
     fcntl(m_connectedFd, F_SETFL, fcntl(m_connectedFd, F_GETFL) | O_NONBLOCK); // 设置非阻塞IO
     m_channel = std::make_unique<Channel>(m_loop, m_connectedFd);
-    m_channel->useET();
-    m_channel->setReadCallback([this]() { this->HandleRequest(); });
+    m_channel->UseET();
+    m_channel->SetReadCallback([this]() { this->HandleRequest(); });
+    m_channel->SetWriteCallback([this]() { this->Write(); });
     m_readBuffer = std::make_unique<Buffer>();
     m_writeBuffer = std::make_unique<Buffer>();
     m_state = State::Connected;
@@ -31,7 +32,7 @@ HttpConnect::~HttpConnect() {
 }
 
 void HttpConnect::EstablishConnection() {
-    m_channel->enableRead();
+    m_channel->EnableRead();
     m_channel->Tie(shared_from_this());
     if (m_onConnect) {
         m_onConnect(shared_from_this()); // 连接建立成功，执行回调函数
@@ -39,17 +40,16 @@ void HttpConnect::EstablishConnection() {
 }
 
 void HttpConnect::DestroyConnection() {
-    m_channel->disableAll();
+    m_channel->DisableAll();
     m_loop->removeChannel(m_channel.get());
     m_state = State::Closed;
 }
 
 void HttpConnect::Write() {
-    if (m_state != State::Connected) {
-        throw std::runtime_error("当前未建立连接");
+    if (m_state == State::Closed) {
+        return;
     }
     WriteNonBlocking();
-    m_writeBuffer->RetrieveAll();
 }
 
 void HttpConnect::HandleClose() {
@@ -112,8 +112,8 @@ void HttpConnect::HandleError(int errorNum, std::string errorMsg) {
     header_buff += "Server: Moran's Web Server\r\n";
     header_buff += "\r\n";
     std::string response = header_buff + body_buff;
-    SetSendBuffer(response.c_str());
-    WriteNonBlocking();
+    m_closeAfterWrite = true;
+    Send(response);
 }
 
 void HttpConnect::SeperateTimer() {
@@ -123,12 +123,25 @@ void HttpConnect::SeperateTimer() {
     }
 }
 
+void HttpConnect::Send(const std::string& response) {
+    Send(response.c_str(), static_cast<int>(response.size()));
+}
+
+void HttpConnect::Send(const char* response, int len) {
+    m_writeBuffer->Append(response, len);
+    WriteNonBlocking();
+}
+
+void HttpConnect::Send(const char* response) {
+    Send(response, static_cast<int>(strlen(response)));
+}
+
 void HttpConnect::ReadNonBlocking() {
     int sockfd = m_connectedFd;
-    char buf[READ_BUFFER];
+    char buf[READ_BUFFER]{0};
     while (true) {
         // std::fill(buf, buf + READ_BUFFER, 0);
-        memset(buf, 0, READ_BUFFER); // 性能更优
+        // memset(buf, 0, READ_BUFFER); // 性能更优->不需要置0
         auto byte_read = read(sockfd, buf, READ_BUFFER);
         if (byte_read > 0) {
             // cout << "Get messages from " << sockfd << ":" << buf << '\n';
@@ -156,26 +169,26 @@ void HttpConnect::ReadNonBlocking() {
 }
 
 void HttpConnect::WriteNonBlocking() {
-    int sockfd = m_connectedFd;
-    auto data_size = m_writeBuffer->ReadableBytes();
-    auto data_left = data_size; // 未发送的数据大小
-    char buf[data_size];
-    std::copy_n(m_writeBuffer->Peek(), data_size, buf);
-    while (data_left > 0) {
-        auto byte_writen = write(sockfd, buf + data_size - data_left, data_left);
-        if (byte_writen == -1 && errno == EINTR) {
-            LOG_INFO << "continue writing...\n";
+    while (m_writeBuffer->ReadableBytes() > 0) {
+        auto sendSzie = static_cast<int>(write(m_connectedFd, m_writeBuffer->Peek(), m_writeBuffer->ReadableBytes()));
+        if (sendSzie > 0) {
+            m_writeBuffer->Retrieve(sendSzie);
             continue;
         }
-        if (byte_writen == -1 && errno == EAGAIN) { // 资源暂时不可用，请稍后重试
-            LOG_WARN << "Resource temporarily unavailable, please try again later\n";
-            break;
+        if (sendSzie == -1 && (errno == EINTR)) {
+            continue;
         }
-        if (byte_writen == -1) {
-            LOG_ERROR << "Other error on client fd " << sockfd << '\n';
-            HandleClose();
-            break;
+        if (sendSzie == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            m_channel->EnableWrite();
+            return;
         }
-        data_left -= byte_writen;
+        LOG_ERROR << "Error on write!";
+        HandleClose(); // 写操作遇到未知错误，关闭连接
+        return;
+    }
+    // 写完后关闭，否则 socket 通常一直可写，会导致 epoll 持续唤醒，CPU 空转
+    m_channel->DisableWrite();
+    if (m_closeAfterWrite) {
+        HandleClose();
     }
 }

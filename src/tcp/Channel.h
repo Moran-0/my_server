@@ -25,20 +25,21 @@ class Channel : public NoCopy, NoMove {
     ~Channel() = default;
     void HandleEvent(uint32_t ready);
     void HandleEventWithGuard(uint32_t ready);
-    void enableRead();
-    void enableWrite();
-    void setEvents(uint32_t ev);
-    void disableAll();
-    void useET();
-    inline int getFd() {
+    void EnableRead();
+    void EnableWrite();
+    void SetEvents(uint32_t ev);
+    void DisableWrite();
+    void DisableAll();
+    void UseET();
+    inline int GetFd() {
         return m_fd;
     }
-    uint32_t getEvents() const;
-    bool getInEpoll() const;
-    void setInEpoll(bool _in = true);
-    void setReadCallback(CallbackFunc);
-    void setWriteCallback(CallbackFunc);
-    void setConnCallback(CallbackFunc);
+    uint32_t GetEvents() const;
+    bool GetInEpoll() const;
+    void SetInEpoll(bool _in = true);
+    void SetReadCallback(CallbackFunc);
+    void SetWriteCallback(CallbackFunc);
+    void SetConnCallback(CallbackFunc);
 
     // 设定tie关系，防止Channel被手动remove掉后，EventLoop还继续调用Channel的回调函数
     void Tie(const std::shared_ptr<void>& obj) {

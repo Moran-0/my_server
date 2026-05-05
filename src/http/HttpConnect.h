@@ -23,6 +23,7 @@ class HttpConnect : public NoCopy, public NoMove, public std::enable_shared_from
     std::unique_ptr<Buffer> m_readBuffer;
     std::unique_ptr<Buffer> m_writeBuffer;
     State m_state;
+    bool m_closeAfterWrite;
     HttpRequest m_request;
     std::weak_ptr<Timer> m_timer; // 连接对应的定时器，定时器过期时关闭连接
 
@@ -68,17 +69,15 @@ class HttpConnect : public NoCopy, public NoMove, public std::enable_shared_from
     const HttpRequest& GetRequest() const {
         return m_request;
     }
+    void Send(const char* response, int len);
+    void Send(const char* response);
+    void Send(const std::string& response);
 
-    void Send(std::string response) {
-        SetSendBuffer(response.c_str());
-        Write();
+    void SetCloseAfterWrite(bool closeAfterWrite) {
+        m_closeAfterWrite = closeAfterWrite;
     }
 
   private:
     void ReadNonBlocking();
     void WriteNonBlocking();
-    void SetSendBuffer(const char* str) {
-        m_writeBuffer->RetrieveAll();
-        m_writeBuffer->Append(str);
-    };
 };

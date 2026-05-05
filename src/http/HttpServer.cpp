@@ -85,12 +85,14 @@ void HttpServer::OnRequest(const std::shared_ptr<HttpConnect>& conn) {
     response.AddHeader("Content-Length", std::to_string(body_buff.size()));
     response.AddHeader("Server", "Moran's Web Server");
     response.SetBody(body_buff);
-
-    conn->Send(response.message());
     if (!request.IsKeepAlive()) {
-        // conn->HandleClose();
-        // 效果同上，因为OnRequest本身就是在连接所在线程调用，下述代码只是让线程边界更稳，两者皆可
-        auto* connLoop = conn->GetLoop();
-        connLoop->RunOneFunc([conn]() { conn->HandleClose(); });
+        conn->SetCloseAfterWrite(true);
     }
+    conn->Send(response.message());
+    // if (!request.IsKeepAlive()) {
+    //     // conn->HandleClose();
+    //     // 效果同上，因为OnRequest本身就是在连接所在线程调用，下述代码只是让线程边界更稳，两者皆可
+    //     auto* connLoop = conn->GetLoop();
+    //     connLoop->RunOneFunc([conn]() { conn->HandleClose(); });
+    // }
 }

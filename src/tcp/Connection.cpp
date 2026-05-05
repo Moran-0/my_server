@@ -19,8 +19,8 @@ constexpr int READ_BUFFER = 1024;
 TcpConnection::TcpConnection(EventLoop* _loop, int sock_fd) : m_loop(_loop), m_connectedFd(sock_fd) {
     fcntl(m_connectedFd, F_SETFL, fcntl(m_connectedFd, F_GETFL) | O_NONBLOCK); // 设置非阻塞IO
     m_channel = std::make_unique<Channel>(m_loop, m_connectedFd);
-    m_channel->useET();
-    m_channel->setReadCallback([this]() { this->HandleMessage(); });
+    m_channel->UseET();
+    m_channel->SetReadCallback([this]() { this->HandleMessage(); });
     m_readBuffer = std::make_unique<Buffer>();
     m_writeBuffer = std::make_unique<Buffer>();
     m_state = State::Connected;
@@ -30,14 +30,14 @@ TcpConnection::~TcpConnection() {
 }
 /// @brief 建立连接，监听可读事件
 void TcpConnection::EstablishConnection() {
-    m_channel->enableRead();
+    m_channel->EnableRead();
     m_channel->Tie(shared_from_this());
     if (m_onConnect) {
         m_onConnect(shared_from_this()); // 连接建立成功，执行回调函数
     }
 }
 void TcpConnection::DestroyConnection() {
-    m_channel->disableAll();
+    m_channel->DisableAll();
     m_loop->removeChannel(m_channel.get());
     m_state = State::Closed;
 }
