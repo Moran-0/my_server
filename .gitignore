@@ -9,4 +9,4 @@
 build/*
 # 忽略codex生成的文件
 .codex
-
+mylog/*

@@ -21,6 +21,8 @@
 #include <fstream>
 #include <sstream>
 #include <unordered_map>
+#include <vector>
+#include <algorithm>
 
 using std::cout;
 using std::endl;
@@ -28,6 +30,150 @@ using Status = HttpResponse::HttpStatusCode;
 
 namespace {
 constexpr std::uintmax_t kMaxStaticFileSize = 32 * 1024 * 1024;
+
+std::string GetMimeType(const std::string& suffix);
+
+struct FileEntry {
+    enum class Type : std::uint8_t { FILE, DIRECTORY };
+    std::string name;
+    std::string relativePath;
+    std::uintmax_t size;
+    Type type;
+};
+
+/// @brief 文件大小格式化
+/// @param size
+/// @return
+std::string FormatFileSize(std::uintmax_t size) {
+    const char* units[] = {"B", "KB", "MB", "GB"};
+    auto value = static_cast<double>(size);
+    int unit = 0;
+
+    while (value >= 1024.0 && unit < 3) {
+        value /= 1024.0;
+        ++unit;
+    }
+
+    std::ostringstream out;
+    if (unit == 0) {
+        out << static_cast<std::uintmax_t>(value) << ' ' << units[unit];
+    } else {
+        out.setf(std::ios::fixed);
+        out.precision(1);
+        out << value << ' ' << units[unit];
+    }
+    return out.str();
+}
+
+/// @brief 对字符串进行URL编码
+/// @param text
+/// @return
+std::string UrlEncode(const std::string& text) {
+    static constexpr char hex[] = "0123456789ABCDEF";
+    std::string encoded;
+
+    for (unsigned char ch : text) {
+        if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_' || ch == '.' || ch == '~') {
+            encoded.push_back(static_cast<char>(ch));
+        } else {
+            encoded.push_back('%');
+            encoded.push_back(hex[ch >> 4]);
+            encoded.push_back(hex[ch & 0x0F]);
+        }
+    }
+
+    return encoded;
+}
+
+bool IsSafePath(const std::string& value) {
+    // std::string 可以存储任意字符序列（包括 '\0'）,需要进行排除
+    if (value.find("..") != std::string::npos || value.find('\0') != std::string::npos) {
+        return false;
+    }
+    std::filesystem::path path(value);
+    if (path.is_absolute()) {
+        return false;
+    }
+    return true;
+}
+
+bool ResolveUserPath(const std::string& staticRoot, const std::string& username, const std::string& path, std::filesystem::path& resolvePath) {
+    if (username.empty() || username.find("..") != std::string::npos || username.find('/') != std::string::npos ||
+        username.find('\\') != std::string::npos || !IsSafePath(path)) {
+        return false;
+    }
+
+    std::error_code ec;
+    const auto staticRootPath = std::filesystem::weakly_canonical(std::filesystem::path(staticRoot), ec);
+    if (ec) {
+        return false;
+    }
+    const auto userRootPath = std::filesystem::weakly_canonical(staticRootPath / username, ec);
+    if (ec || !std::filesystem::exists(userRootPath, ec) || !std::filesystem::is_directory(userRootPath, ec)) {
+        return false;
+    }
+
+    resolvePath = std::filesystem::weakly_canonical(userRootPath / path, ec);
+    if (ec || !std::filesystem::exists(resolvePath, ec)) {
+        return false;
+    }
+
+    const auto relative = std::filesystem::relative(resolvePath, staticRootPath, ec);
+    if (ec || relative.empty()) {
+        return false;
+    }
+    return true;
+}
+
+/// @brief 读取用户目录文件和文件夹列表
+/// @param staticRoot
+/// @param username 用户名
+/// @return
+std::vector<FileEntry> LoadUserContent(const std::string& staticRoot, const std::string& username, const std::string& curDir) {
+    std::vector<FileEntry> entries;
+    std::filesystem::path userDir;
+
+    std::error_code ec;
+    if (!ResolveUserPath(staticRoot, username, curDir, userDir)) {
+        return entries;
+    }
+    const auto userRoot = std::filesystem::weakly_canonical(std::filesystem::path(staticRoot) / username, ec);
+    if (ec) {
+        return entries;
+    }
+
+    for (const auto& entry : std::filesystem::directory_iterator(userDir, ec)) {
+        if (ec) {
+            break;
+        }
+
+        const auto& path = entry.path();
+        const auto name = path.filename().string();
+        const auto rel = std::filesystem::relative(path, userRoot, ec);
+        if (ec) {
+            continue;
+        }
+        if (entry.is_regular_file()) {
+            const auto size = entry.file_size(ec);
+            if (ec) {
+                continue;
+            }
+            entries.push_back(FileEntry{name, rel.string(), size, FileEntry::Type::FILE});
+
+        } else if (entry.is_directory()) {
+            entries.push_back(FileEntry{name, rel.string(), 0, FileEntry::Type::DIRECTORY});
+        }
+    }
+
+    std::sort(entries.begin(), entries.end(), [](const FileEntry& lhs, const FileEntry& rhs) {
+        if (lhs.type != rhs.type) {
+            return lhs.type == FileEntry::Type::DIRECTORY;
+        }
+        return lhs.name < rhs.name;
+    });
+
+    return entries;
+}
 
 std::string DecodeUrlPath(const std::string& url) {
     std::string path;
@@ -98,6 +244,18 @@ std::unordered_map<std::string, std::string> ParseFormUrlEncoded(const std::stri
 
     return result;
 }
+
+std::unordered_map<std::string, std::string> ParseQueryString(const std::string& url) {
+    std::unordered_map<std::string, std::string> result;
+
+    const auto q = url.find('?');
+    if (q == std::string::npos || q + 1 >= url.size()) {
+        return result;
+    }
+
+    return ParseFormUrlEncoded(url.substr(q + 1));
+}
+
 /// @brief 避免响应页插入未转义用户输入
 /// @param text
 /// @return
@@ -136,7 +294,7 @@ std::string RecordValue(const std::string& text) {
     value.reserve(text.size());
 
     for (char ch : text) {
-        if (ch == '\r' || ch == '\n' || ch == '\t') {
+        if (ch == '\r' || ch == '\n' || ch == '\t' || ch == '"') {
             value.push_back(' ');
         } else {
             value.push_back(ch);
@@ -220,6 +378,334 @@ std::string ResultPage(const std::string& title, const std::string& message) {
 </html>)";
 }
 
+std::string ParentDirOf(const std::string& currentDir) {
+    if (currentDir.empty()) {
+        return "";
+    }
+
+    std::filesystem::path p(currentDir);
+    return p.parent_path().string();
+}
+std::string ContentListPage(const std::string& username, const std::string& currentDir, const std::vector<FileEntry>& entries,
+                            const std::string& notice = "") {
+    std::string rows;
+    std::string noticeBlock;
+
+    const auto encodedUser = UrlEncode(username);
+    const auto encodedDir = UrlEncode(currentDir);
+
+    if (!notice.empty()) {
+        noticeBlock = R"(
+      <div class="notice">)" +
+                      HtmlEscape(notice) + R"(</div>
+        )";
+    }
+
+    if (!currentDir.empty()) {
+        const auto parent = ParentDirOf(currentDir);
+        rows += R"(
+          <a class="entry up" href="/files?username=)" +
+                encodedUser + R"(&dir=)" + UrlEncode(parent) + R"(">
+            <span class="icon">UP</span>
+            <span class="name">..</span>
+            <span class="size">Parent directory</span>
+            <span></span>
+            <span></span>
+          </a>
+        )";
+    }
+
+    if (entries.empty()) {
+        rows += R"(
+          <div class="empty">
+            <strong>No entries</strong>
+            <span>This directory is empty.</span>
+          </div>
+        )";
+    } else {
+        for (const auto& entry : entries) {
+            if (entry.type == FileEntry::Type::DIRECTORY) {
+                rows += R"(
+          <a class="entry" href="/files?username=)" +
+                        encodedUser + R"(&dir=)" + UrlEncode(entry.relativePath) + R"(">
+            <span class="icon folder">DIR</span>
+            <span class="name">)" +
+                        HtmlEscape(entry.name) + R"(</span>
+            <span class="size">Directory</span>
+            <span></span>
+            <span></span>
+          </a>
+                )";
+            } else {
+                rows += R"(
+          <div class="entry">
+            <span class="icon">FILE</span>
+            <a class="name" href="/)" +
+                        HtmlEscape(UrlEncode(username)) + "/" + HtmlEscape(entry.relativePath) + R"(" target="_blank" rel="noopener">)" +
+                        HtmlEscape(entry.name) + R"(</a>
+            <span class="size">)" +
+                        FormatFileSize(entry.size) + R"(</span>
+
+            <form method="post" action="/download">
+              <input type="hidden" name="username" value=")" +
+                        HtmlEscape(username) + R"(">
+              <input type="hidden" name="path" value=")" +
+                        HtmlEscape(entry.relativePath) + R"(">
+              <button class="download" type="submit">Download</button>
+            </form>
+
+            <form method="post" action="/delete">
+              <input type="hidden" name="username" value=")" +
+                        HtmlEscape(username) + R"(">
+              <input type="hidden" name="path" value=")" +
+                        HtmlEscape(entry.relativePath) + R"(">
+              <button class="delete" type="submit">Delete</button>
+            </form>
+          </div>
+                )";
+            }
+        }
+    }
+
+    return R"(<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>)" +
+           HtmlEscape(username) + R"('s Files</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --text: #182230;
+      --muted: #667085;
+      --line: #d8dee9;
+      --accent: #2563eb;
+      --soft: #eef4ff;
+      --danger: #dc2626;
+      --danger-soft: #fef2f2;
+      --ok-soft: #ecfdf3;
+      --ok-text: #067647;
+      --folder: #7c3aed;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 36px 24px;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    main {
+      width: min(1040px, 100%);
+      margin: 0 auto;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: flex-end;
+      margin-bottom: 22px;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(34px, 6vw, 58px);
+      line-height: 1;
+      letter-spacing: 0;
+    }
+    p {
+      margin: 12px 0 0;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    code {
+      padding: 2px 6px;
+      border-radius: 6px;
+      background: #eef2f7;
+      color: var(--text);
+    }
+    .home {
+      flex: 0 0 auto;
+      padding: 10px 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--text);
+      background: var(--panel);
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 18px 42px rgba(24, 34, 48, 0.08);
+      overflow: hidden;
+    }
+    .notice {
+      margin: 16px;
+      padding: 12px 14px;
+      border: 1px solid #abefc6;
+      border-radius: 8px;
+      background: var(--ok-soft);
+      color: var(--ok-text);
+      font-weight: 700;
+    }
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfe;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .list {
+      display: grid;
+    }
+    .entry {
+      display: grid;
+      grid-template-columns: 72px minmax(0, 1fr) 130px 110px 90px;
+      gap: 14px;
+      align-items: center;
+      min-height: 64px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--line);
+      color: var(--text);
+      text-decoration: none;
+    }
+    .entry:last-child {
+      border-bottom: 0;
+    }
+    .entry:hover {
+      background: var(--soft);
+    }
+    .entry form {
+      margin: 0;
+    }
+    .entry button {
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--text);
+      font: inherit;
+      font-size: 14px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .entry button:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .entry .delete {
+      border-color: #fecaca;
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+    .entry .delete:hover {
+      border-color: var(--danger);
+    }
+    .icon {
+      display: inline-grid;
+      place-items: center;
+      width: 52px;
+      height: 34px;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .folder {
+      background: var(--folder);
+    }
+    .name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text);
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .name:hover {
+      color: var(--accent);
+      text-decoration: underline;
+    }
+    .size {
+      color: var(--muted);
+      text-align: right;
+      font-size: 14px;
+    }
+    .empty {
+      display: grid;
+      gap: 8px;
+      padding: 42px 20px;
+      text-align: center;
+    }
+    .empty strong {
+      font-size: 22px;
+    }
+    .empty span {
+      color: var(--muted);
+    }
+    @media (max-width: 760px) {
+      body {
+        padding: 24px 16px;
+      }
+      header {
+        display: grid;
+        align-items: start;
+      }
+      .home {
+        width: fit-content;
+      }
+      .entry {
+        grid-template-columns: 52px minmax(0, 1fr);
+      }
+      .size,
+      .entry form {
+        grid-column: 2;
+        text-align: left;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Your files</h1>
+        <p>Signed in as <strong>)" +
+           HtmlEscape(username) + R"(</strong>. Current directory: <code>/)" + HtmlEscape(currentDir) + R"(</code></p>
+      </div>
+      <a class="home" href="/">Back home</a>
+    </header>
+
+    <section class="panel">
+)" + noticeBlock +
+           R"(
+      <div class="toolbar">
+        <span>Name</span>
+        <span>)" +
+           std::to_string(entries.size()) + R"( item(s)</span>
+      </div>
+      <div class="list">
+)" + rows + R"(
+      </div>
+    </section>
+  </main>
+</body>
+</html>)";
+}
+
 bool AppendRegisteredUser(const std::unordered_map<std::string, std::string>& form) {
     std::filesystem::create_directories("data");
     std::ofstream out("data/users.txt", std::ios::out | std::ios::app);
@@ -237,6 +723,31 @@ bool AppendRegisteredUser(const std::unordered_map<std::string, std::string>& fo
 void SendHtmlResponse(const std::shared_ptr<HttpConnect>& conn, HttpResponse& response, const std::string& body, bool closeConnection) {
     response.SetContentType("text/html; charset=utf-8");
     response.SetBody(body);
+    if (closeConnection) {
+        conn->SetCloseAfterWrite(true);
+    }
+    conn->Send(response.message());
+}
+
+void SendDownloadResponse(const std::shared_ptr<HttpConnect>& conn, HttpResponse& response, const std::filesystem::path& filePath,
+                          const std::string& filename, bool closeConnection) {
+    std::ifstream file(filePath, std::ios::in | std::ios::binary);
+    if (!file) {
+        response.SetStatusCode(Status::K403Forbidden);
+        response.SetStatusMessage("Forbidden");
+        SendHtmlResponse(conn, response, ResultPage("Download failed", "The server could not open the selected file."), closeConnection);
+        return;
+    }
+
+    std::ostringstream body;
+    body << file.rdbuf();
+
+    response.SetStatusCode(Status::K200K);
+    response.SetStatusMessage("OK");
+    response.SetContentType(GetMimeType(filePath.extension().string()));
+    response.AddHeader("Content-Disposition", "attachment; filename=\"" + RecordValue(filename) + "\"");
+    response.SetBody(body.str());
+
     if (closeConnection) {
         conn->SetCloseAfterWrite(true);
     }
@@ -413,7 +924,7 @@ bool HttpServer::HandlePostRequest(const std::shared_ptr<HttpConnect>& conn) {
     response.AddHeader("Server", "Moran's Web Server");
 
     const auto path = DecodeUrlPath(request.GetUrl());
-    if (path != "/login" && path != "/register") {
+    if (path != "/login" && path != "/register" && path != "/download" && path != "/delete") {
         response.SetStatusCode(Status::K404NotFound);
         response.SetStatusMessage("Not Found");
         SendHtmlResponse(conn, response, ErrorBody(Status::K404NotFound, "Not Found"), closeConnection);
@@ -422,9 +933,46 @@ bool HttpServer::HandlePostRequest(const std::shared_ptr<HttpConnect>& conn) {
 
     const auto form = ParseFormUrlEncoded(request.GetBody());
     const auto username = form.find("username");
-    const auto password = form.find("password");
+    std::string currentDir{};
 
-    if (username == form.end() || password == form.end() || username->second.empty() || password->second.empty()) {
+    if (username == form.end() || username->second.empty()) {
+        response.SetStatusCode(Status::K400BadRequest);
+        response.SetStatusMessage("Bad Request");
+        SendHtmlResponse(conn, response, ResultPage("Missing information", "Please provide a username."), closeConnection);
+        return true;
+    }
+
+    if (path == "/download" || path == "/delete") {
+        const auto filename = form.find("path");
+        std::filesystem::path filePath;
+
+        if (filename == form.end() || !ResolveUserPath(m_staticRoot, username->second, filename->second, filePath)) {
+            response.SetStatusCode(Status::K404NotFound);
+            response.SetStatusMessage("Not Found");
+            SendHtmlResponse(conn, response, ResultPage("File not found", "The requested file does not exist or cannot be accessed."),
+                             closeConnection);
+            return true;
+        }
+
+        if (path == "/download") {
+            SendDownloadResponse(conn, response, filePath, filename->second, closeConnection);
+            return true;
+        }
+
+        std::error_code ec;
+        std::filesystem::remove(filePath, ec);
+        const auto userRoot = std::filesystem::weakly_canonical(std::filesystem::path(m_staticRoot) / username->second);
+        currentDir = std::filesystem::relative(filePath.parent_path(), userRoot).string();
+        response.SetStatusCode(ec ? Status::K500internalServerError : Status::K200K);
+        response.SetStatusMessage(ec ? "Internal Server Error" : "OK");
+        const auto files = LoadUserContent(m_staticRoot, username->second, currentDir);
+        const auto notice = ec ? "Delete failed. Please check file permissions." : "Deleted \"" + filename->second + "\".";
+        SendHtmlResponse(conn, response, ContentListPage(username->second, currentDir, files, notice), closeConnection);
+        return true;
+    }
+
+    const auto password = form.find("password");
+    if (password == form.end() || password->second.empty()) {
         response.SetStatusCode(Status::K400BadRequest);
         response.SetStatusMessage("Bad Request");
         SendHtmlResponse(conn, response, ResultPage("Missing information", "Please provide both username and password."), closeConnection);
@@ -436,10 +984,8 @@ bool HttpServer::HandlePostRequest(const std::shared_ptr<HttpConnect>& conn) {
         response.SetStatusMessage("OK");
 
         if (password->second == "password") {
-            SendHtmlResponse(
-                conn, response,
-                ResultPage("Welcome, " + username->second, "Demo login passed. The real SQL-backed verification can replace this branch later."),
-                closeConnection);
+            const auto files = LoadUserContent(m_staticRoot, username->second, currentDir);
+            SendHtmlResponse(conn, response, ContentListPage(username->second, currentDir, files), closeConnection);
         } else {
             SendHtmlResponse(conn, response, ResultPage("Login failed", "This demo accepts any username with password set to \"password\"."),
                              closeConnection);
@@ -509,8 +1055,25 @@ bool HttpServer::ServeStaticFile(const std::shared_ptr<HttpConnect>& conn) {
         filePath /= "index.html";
     }
 
+    if (path == "/files") {
+        const auto query = ParseQueryString(request.GetUrl());
+        const auto username = query.find("username");
+        const auto dir = query.find("dir");
+
+        if (username == query.end() || username->second.empty()) {
+            response.SetStatusCode(Status::K400BadRequest);
+            response.SetStatusMessage("Bad Request");
+            SendHtmlResponse(conn, response, ResultPage("Missing username", "The file list request needs a username."), closeConnection);
+            return true;
+        }
+        const auto currentDir = dir == query.end() ? "" : dir->second;
+        const auto files = LoadUserContent(m_staticRoot, username->second, currentDir);
+        SendHtmlResponse(conn, response, ContentListPage(username->second, currentDir, files), closeConnection);
+        return true;
+    }
+
     std::error_code ec;
-    if (!std::filesystem::exists(filePath, ec) || !std::filesystem::is_regular_file(filePath, ec)) {
+    if (!std::filesystem::exists(filePath, ec)) {
         response.SetStatusCode(HttpResponse::K404NotFound);
         response.SetStatusMessage("Not Found");
         response.SetContentType("text/html; charset=utf-8");
