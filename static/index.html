@@ -7,13 +7,14 @@
   <style>
     :root {
       color-scheme: light;
-      --bg: #f6f7f9;
+      --bg: #f5f7fb;
       --panel: #ffffff;
-      --text: #17202e;
+      --text: #182230;
       --muted: #667085;
-      --line: #d9dee8;
-      --accent: #2f6fed;
+      --line: #d8dee9;
+      --accent: #2563eb;
       --accent-soft: #eaf1ff;
+      --success: #16a36c;
     }
     * {
       box-sizing: border-box;
@@ -21,7 +22,7 @@
     body {
       margin: 0;
       min-height: 100vh;
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: var(--bg);
       color: var(--text);
     }
@@ -29,26 +30,35 @@
       min-height: 100vh;
       display: grid;
       align-items: center;
-      padding: 48px 24px;
+      padding: 42px 24px;
     }
     main {
-      width: min(920px, 100%);
+      width: min(1080px, 100%);
       margin: 0 auto;
       display: grid;
-      gap: 28px;
+      grid-template-columns: minmax(0, 1fr) 400px;
+      gap: 24px;
+      align-items: stretch;
     }
-    .hero {
-      padding: clamp(32px, 7vw, 64px);
+    .intro,
+    .auth {
       border: 1px solid var(--line);
       border-radius: 8px;
       background: var(--panel);
-      box-shadow: 0 18px 44px rgba(23, 32, 46, 0.08);
+      box-shadow: 0 18px 42px rgba(24, 34, 48, 0.08);
     }
-    .eyebrow {
+    .intro {
+      display: grid;
+      align-content: center;
+      min-height: 560px;
+      padding: clamp(34px, 6vw, 64px);
+    }
+    .status {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      margin: 0 0 22px;
+      width: fit-content;
+      margin: 0 0 24px;
       padding: 8px 12px;
       border-radius: 999px;
       background: var(--accent-soft);
@@ -60,49 +70,153 @@
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background: #21a67a;
+      background: var(--success);
     }
     h1 {
-      max-width: 760px;
+      max-width: 680px;
       margin: 0;
-      font-size: clamp(38px, 8vw, 76px);
+      font-size: clamp(42px, 7vw, 76px);
       line-height: 0.98;
       letter-spacing: 0;
     }
     .lead {
-      max-width: 640px;
+      max-width: 600px;
       margin: 24px 0 0;
       color: var(--muted);
-      font-size: clamp(17px, 2vw, 20px);
+      font-size: 19px;
       line-height: 1.7;
     }
-    .grid {
+    .meta {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 16px;
+      gap: 12px;
+      margin-top: 34px;
     }
-    .item {
-      min-height: 120px;
-      padding: 20px;
+    .meta div {
+      padding: 16px;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: var(--panel);
+      background: #fbfcfe;
     }
-    .item strong {
+    .meta strong {
       display: block;
-      margin-bottom: 10px;
-      font-size: 16px;
+      margin-bottom: 6px;
+      font-size: 14px;
     }
-    .item span {
+    .meta span {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .auth {
+      padding: 24px;
+    }
+    .tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 18px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfe;
+    }
+    .tabs a {
+      padding: 10px 12px;
+      border-radius: 6px;
+      color: var(--muted);
+      font-weight: 700;
+      text-align: center;
+      text-decoration: none;
+    }
+    .tabs a:first-child,
+    #register:target ~ .tabs a:last-child {
+      background: var(--panel);
+      color: var(--text);
+      box-shadow: 0 6px 16px rgba(24, 34, 48, 0.08);
+    }
+    #register:target ~ .tabs a:first-child {
+      background: transparent;
+      color: var(--muted);
+      box-shadow: none;
+    }
+    .form {
+      display: grid;
+      gap: 14px;
+    }
+    .register-form {
+      display: none;
+    }
+    #register:target ~ .login-form {
+      display: none;
+    }
+    #register:target ~ .register-form {
+      display: grid;
+    }
+    h2 {
+      margin: 0 0 6px;
+      font-size: 26px;
+      letter-spacing: 0;
+    }
+    .hint {
+      margin: 0 0 12px;
       color: var(--muted);
       line-height: 1.6;
     }
-    @media (max-width: 760px) {
-      .grid {
+    label {
+      display: grid;
+      gap: 7px;
+      color: #344054;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    input {
+      width: 100%;
+      min-height: 44px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--text);
+      font: inherit;
+      outline: none;
+      background: #ffffff;
+    }
+    input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+    }
+    button {
+      min-height: 46px;
+      margin-top: 6px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #ffffff;
+      font: inherit;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #1d4ed8;
+    }
+    @media (max-width: 900px) {
+      main {
         grid-template-columns: 1fr;
       }
-      .hero {
-        padding: 32px 24px;
+      .intro {
+        min-height: auto;
+      }
+    }
+    @media (max-width: 640px) {
+      .page {
+        padding: 24px 16px;
+      }
+      .meta {
+        grid-template-columns: 1fr;
+      }
+      .intro,
+      .auth {
+        padding: 22px;
       }
     }
   </style>
@@ -110,24 +224,68 @@
 <body>
   <div class="page">
     <main>
-      <section class="hero">
-        <p class="eyebrow"><span class="dot"></span> Server is running</p>
+      <section class="intro">
+        <p class="status"><span class="dot"></span> Server is running</p>
         <h1>Moran's Web Server</h1>
-        <p class="lead">A lightweight C++ web server for serving static pages, images, audio, and other everyday web assets.</p>
+        <p class="lead">A lightweight C++ HTTP server with static file serving and simple form-based authentication endpoints.</p>
+        <div class="meta" aria-label="Server capabilities">
+          <div>
+            <strong>Static assets</strong>
+            <span>Serve HTML, images, audio, scripts, and styles.</span>
+          </div>
+          <div>
+            <strong>POST forms</strong>
+            <span>Handle login and registration requests.</span>
+          </div>
+          <div>
+            <strong>Next step</strong>
+            <span>Swap file storage for SQL-backed users.</span>
+          </div>
+        </div>
       </section>
-      <section class="grid" aria-label="Server features">
-        <div class="item">
-          <strong>Static files</strong>
-          <span>HTML, CSS, JavaScript, images, audio, and binary assets from the static root.</span>
-        </div>
-        <div class="item">
-          <strong>HTTP routing</strong>
-          <span>Requests are parsed, mapped to files, and returned with matching response headers.</span>
-        </div>
-        <div class="item">
-          <strong>Nonblocking I/O</strong>
-          <span>The event loop keeps connections responsive while data is read and written.</span>
-        </div>
+
+      <section class="auth">
+        <span id="register"></span>
+        <nav class="tabs" aria-label="Authentication tabs">
+          <a href="#">Login</a>
+          <a href="#register">Register</a>
+        </nav>
+
+        <form class="form login-form" method="post" action="/login">
+          <div>
+            <h2>Login</h2>
+            <p class="hint">Demo validation accepts password: <strong>password</strong>.</p>
+          </div>
+          <label>
+            Username
+            <input name="username" autocomplete="username" required>
+          </label>
+          <label>
+            Password
+            <input name="password" type="password" autocomplete="current-password" required>
+          </label>
+          <button type="submit">Sign in</button>
+        </form>
+
+        <form class="form register-form" method="post" action="/register">
+          <div>
+            <h2>Register</h2>
+            <p class="hint">The server appends this record to <code>data/users.txt</code>.</p>
+          </div>
+          <label>
+            Username
+            <input name="username" autocomplete="username" required>
+          </label>
+          <label>
+            Email
+            <input name="email" type="email" autocomplete="email" required>
+          </label>
+          <label>
+            Password
+            <input name="password" type="password" autocomplete="new-password" required>
+          </label>
+          <button type="submit">Create account</button>
+        </form>
       </section>
     </main>
   </div>

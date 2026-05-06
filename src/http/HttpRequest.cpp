@@ -246,6 +246,8 @@ void HttpRequest::ParseHeader(const char c) {
         if (c == '\n') {
             if (m_contentLength > 0) {
                 m_parseState = HttpParseState::BODY;
+            } else if (m_method == HttpMethod::POST && m_headers.find("Content-Length") == m_headers.end()) {
+                m_parseState = HttpParseState::ERROR;
             } else {
                 m_parseState = HttpParseState::FINISH;
             }

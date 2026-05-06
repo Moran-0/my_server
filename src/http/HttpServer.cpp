@@ -16,9 +16,11 @@
 #include <unistd.h>
 #include <functional>
 #include <cstdlib>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <unordered_map>
 
 using std::cout;
 using std::endl;
@@ -49,6 +51,201 @@ std::string DecodeUrlPath(const std::string& url) {
 
     return path;
 }
+// url编码数据解码
+std::string UrlDecode(const std::string& value) {
+    std::string decoded;
+    decoded.reserve(value.size());
+
+    for (size_t i = 0; i < value.size(); ++i) {
+        if (value[i] == '+') {
+            decoded.push_back(' ');
+            continue;
+        }
+        if (value[i] == '%' && i + 2 < value.size()) {
+            const auto hex = value.substr(i + 1, 2);
+            char* parseEnd = nullptr;
+            const long ch = std::strtol(hex.c_str(), &parseEnd, 16);
+            if (parseEnd == hex.c_str() + 2) {
+                decoded.push_back(static_cast<char>(ch));
+                i += 2;
+                continue;
+            }
+        }
+        decoded.push_back(value[i]);
+    }
+
+    return decoded;
+}
+
+std::unordered_map<std::string, std::string> ParseFormUrlEncoded(const std::string& body) {
+    std::unordered_map<std::string, std::string> result;
+    size_t pos = 0;
+
+    while (pos <= body.size()) {
+        const auto amp = body.find('&', pos);
+        const auto end = amp == std::string::npos ? body.size() : amp;
+        const auto eq = body.find('=', pos);
+
+        if (eq != std::string::npos && eq < end) {
+            result[UrlDecode(body.substr(pos, eq - pos))] = UrlDecode(body.substr(eq + 1, end - eq - 1));
+        }
+
+        if (amp == std::string::npos) {
+            break;
+        }
+        pos = amp + 1;
+    }
+
+    return result;
+}
+/// @brief 避免响应页插入未转义用户输入
+/// @param text
+/// @return
+std::string HtmlEscape(const std::string& text) {
+    std::string escaped;
+    escaped.reserve(text.size());
+
+    for (char ch : text) {
+        switch (ch) {
+        case '&':
+            escaped += "&amp;";
+            break;
+        case '<':
+            escaped += "&lt;";
+            break;
+        case '>':
+            escaped += "&gt;";
+            break;
+        case '"':
+            escaped += "&quot;";
+            break;
+        case '\'':
+            escaped += "&#39;";
+            break;
+        default:
+            escaped.push_back(ch);
+            break;
+        }
+    }
+
+    return escaped;
+}
+
+std::string RecordValue(const std::string& text) {
+    std::string value;
+    value.reserve(text.size());
+
+    for (char ch : text) {
+        if (ch == '\r' || ch == '\n' || ch == '\t') {
+            value.push_back(' ');
+        } else {
+            value.push_back(ch);
+        }
+    }
+
+    return value;
+}
+
+std::string ResultPage(const std::string& title, const std::string& message) {
+    return R"(<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>)" +
+           HtmlEscape(title) + R"(</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --text: #182230;
+      --muted: #667085;
+      --line: #d8dee9;
+      --accent: #2563eb;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 32px;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    main {
+      width: min(520px, 100%);
+      padding: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 18px 42px rgba(24, 34, 48, 0.08);
+    }
+    h1 {
+      margin: 0;
+      font-size: 34px;
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+    p {
+      margin: 16px 0 0;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+    a {
+      display: inline-block;
+      margin-top: 24px;
+      color: var(--accent);
+      font-weight: 700;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>)" +
+           HtmlEscape(title) + R"(</h1>
+    <p>)" + HtmlEscape(message) +
+           R"(</p>
+    <a href="/">Back to home</a>
+  </main>
+</body>
+</html>)";
+}
+
+bool AppendRegisteredUser(const std::unordered_map<std::string, std::string>& form) {
+    std::filesystem::create_directories("data");
+    std::ofstream out("data/users.txt", std::ios::out | std::ios::app);
+    if (!out) {
+        return false;
+    }
+
+    const auto now = static_cast<long long>(std::time(nullptr));
+    out << "time=" << now << '\t' << "username=" << RecordValue(form.at("username")) << '\t' << "email=" << RecordValue(form.at("email")) << '\t'
+        << "password=" << RecordValue(form.at("password")) << '\n';
+
+    return true;
+}
+
+void SendHtmlResponse(const std::shared_ptr<HttpConnect>& conn, HttpResponse& response, const std::string& body, bool closeConnection) {
+    response.SetContentType("text/html; charset=utf-8");
+    response.SetBody(body);
+    if (closeConnection) {
+        conn->SetCloseAfterWrite(true);
+    }
+    conn->Send(response.message());
+}
+/// @brief 统一错误html返回
+/// @param statusCode
+/// @param statusMessage
+/// @return
 std::string ErrorBody(Status statusCode, const std::string& statusMessage) {
     const auto code = std::to_string(statusCode);
     std::string body = R"(<!doctype html>
@@ -201,7 +398,74 @@ void HttpServer::CreateConnection(int sock_fd) {
 }
 
 void HttpServer::OnRequest(const std::shared_ptr<HttpConnect>& conn) {
+    const auto& request = conn->GetRequest();
+    if (request.GetMethod() == HttpRequest::HttpMethod::POST) {
+        HandlePostRequest(conn);
+        return;
+    }
     ServeStaticFile(conn);
+}
+
+bool HttpServer::HandlePostRequest(const std::shared_ptr<HttpConnect>& conn) {
+    const auto request = conn->GetRequest();
+    const bool closeConnection = !request.IsKeepAlive();
+    HttpResponse response(closeConnection);
+    response.AddHeader("Server", "Moran's Web Server");
+
+    const auto path = DecodeUrlPath(request.GetUrl());
+    if (path != "/login" && path != "/register") {
+        response.SetStatusCode(Status::K404NotFound);
+        response.SetStatusMessage("Not Found");
+        SendHtmlResponse(conn, response, ErrorBody(Status::K404NotFound, "Not Found"), closeConnection);
+        return true;
+    }
+
+    const auto form = ParseFormUrlEncoded(request.GetBody());
+    const auto username = form.find("username");
+    const auto password = form.find("password");
+
+    if (username == form.end() || password == form.end() || username->second.empty() || password->second.empty()) {
+        response.SetStatusCode(Status::K400BadRequest);
+        response.SetStatusMessage("Bad Request");
+        SendHtmlResponse(conn, response, ResultPage("Missing information", "Please provide both username and password."), closeConnection);
+        return true;
+    }
+
+    if (path == "/login") {
+        response.SetStatusCode(Status::K200K);
+        response.SetStatusMessage("OK");
+
+        if (password->second == "password") {
+            SendHtmlResponse(
+                conn, response,
+                ResultPage("Welcome, " + username->second, "Demo login passed. The real SQL-backed verification can replace this branch later."),
+                closeConnection);
+        } else {
+            SendHtmlResponse(conn, response, ResultPage("Login failed", "This demo accepts any username with password set to \"password\"."),
+                             closeConnection);
+        }
+        return true;
+    }
+
+    const auto email = form.find("email");
+    if (email == form.end() || email->second.empty()) {
+        response.SetStatusCode(Status::K400BadRequest);
+        response.SetStatusMessage("Bad Request");
+        SendHtmlResponse(conn, response, ResultPage("Missing email", "Please provide an email address for registration."), closeConnection);
+        return true;
+    }
+
+    if (!AppendRegisteredUser(form)) {
+        response.SetStatusCode(Status::K500internalServerError);
+        response.SetStatusMessage("Internal Server Error");
+        SendHtmlResponse(conn, response, ResultPage("Registration failed", "The server could not write the registration record."), closeConnection);
+        return true;
+    }
+
+    response.SetStatusCode(Status::K200K);
+    response.SetStatusMessage("OK");
+    SendHtmlResponse(conn, response, ResultPage("Registration saved", "The registration data was written to data/users.txt."), closeConnection);
+    return true;
 }
 
 bool HttpServer::ServeStaticFile(const std::shared_ptr<HttpConnect>& conn) {

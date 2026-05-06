@@ -47,4 +47,5 @@ class HttpServer {
   private:
     void OnRequest(const std::shared_ptr<HttpConnect>& conn);
     bool ServeStaticFile(const std::shared_ptr<HttpConnect>& conn);
+    bool HandlePostRequest(const std::shared_ptr<HttpConnect>& conn);
 };
