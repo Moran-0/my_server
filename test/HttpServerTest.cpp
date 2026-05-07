@@ -14,8 +14,11 @@ int main() {
     Logger::setOutput(AsyncOutput);
     Logger::setFlush(AysncFlushFunc);
     g_asyncLog->Start();
-
-    HttpServer* server = new HttpServer("127.0.0.1", 8888);
-    server->start();
+    std::string user{"moran"};
+    std::string passwd{"1234567890"};
+    std::string db{"web_server"};
+    auto* server = new HttpServer("127.0.0.1", 8888);
+    server->InitSqlPool("127.0.0.1", 3306, user, passwd, db);
+    server->Start();
     return 0;
 }

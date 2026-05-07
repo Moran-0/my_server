@@ -706,20 +706,6 @@ std::string ContentListPage(const std::string& username, const std::string& curr
 </html>)";
 }
 
-bool AppendRegisteredUser(const std::unordered_map<std::string, std::string>& form) {
-    std::filesystem::create_directories("data");
-    std::ofstream out("data/users.txt", std::ios::out | std::ios::app);
-    if (!out) {
-        return false;
-    }
-
-    const auto now = static_cast<long long>(std::time(nullptr));
-    out << "time=" << now << '\t' << "username=" << RecordValue(form.at("username")) << '\t' << "email=" << RecordValue(form.at("email")) << '\t'
-        << "password=" << RecordValue(form.at("password")) << '\n';
-
-    return true;
-}
-
 void SendHtmlResponse(const std::shared_ptr<HttpConnect>& conn, HttpResponse& response, const std::string& body, bool closeConnection) {
     response.SetContentType("text/html; charset=utf-8");
     response.SetBody(body);
@@ -855,7 +841,7 @@ std::string GetMimeType(const std::string& suffix) {
 }
 } // namespace
 
-HttpServer::HttpServer(const char* ip, int port) : m_staticRoot("./static") {
+HttpServer::HttpServer(const char* ip, int port) : m_staticRoot("./static"), m_sqlPool(MysqlPool::Instance()) {
     m_mainReactor = std::make_unique<EventLoop>();
     m_acceptor = std::make_unique<Acceptor>(m_mainReactor.get(), ip, port);
     m_acceptor->SetNewConnectionCallback([this](int sock_fd) { this->CreateConnection(sock_fd); });
@@ -864,7 +850,12 @@ HttpServer::HttpServer(const char* ip, int port) : m_staticRoot("./static") {
     m_requestCallback = [this](const std::shared_ptr<HttpConnect>& conn) { this->OnRequest(conn); };
 }
 
-void HttpServer::start() {
+void HttpServer::InitSqlPool(const std::string& host, int port, const std::string& user, const std::string& passwd, const std::string& db,
+                             size_t poolSize) {
+    m_sqlPool.Init(host, port, user, passwd, db, poolSize);
+}
+
+void HttpServer::Start() {
     m_subReactorsPool->Start(); // 创建并启动线程池，创建subReactor线程，并让每个subReactor线程的EventLoop开始事件循环
     LOG_INFO << "HttpServer " << " Start!" << '\n';
     m_mainReactor->loop();
@@ -983,12 +974,15 @@ bool HttpServer::HandlePostRequest(const std::shared_ptr<HttpConnect>& conn) {
         response.SetStatusCode(Status::K200K);
         response.SetStatusMessage("OK");
 
-        if (password->second == "password") {
+        auto connGuard = m_sqlPool.Borrow();
+        ResultSet rs = connGuard->Query("SELECT id FROM users WHERE username='" + connGuard->Escape(username->second) + "' AND password='" +
+                                        connGuard->Escape(password->second) + "' LIMIT 1");
+
+        if (rs.Ok() && !rs.Empty()) {
             const auto files = LoadUserContent(m_staticRoot, username->second, currentDir);
             SendHtmlResponse(conn, response, ContentListPage(username->second, currentDir, files), closeConnection);
         } else {
-            SendHtmlResponse(conn, response, ResultPage("Login failed", "This demo accepts any username with password set to \"password\"."),
-                             closeConnection);
+            SendHtmlResponse(conn, response, ResultPage("Login failed", "Invalid username or password."), closeConnection);
         }
         return true;
     }
@@ -1001,16 +995,36 @@ bool HttpServer::HandlePostRequest(const std::shared_ptr<HttpConnect>& conn) {
         return true;
     }
 
-    if (!AppendRegisteredUser(form)) {
-        response.SetStatusCode(Status::K500internalServerError);
-        response.SetStatusMessage("Internal Server Error");
-        SendHtmlResponse(conn, response, ResultPage("Registration failed", "The server could not write the registration record."), closeConnection);
+    // 注册：插入 MySQL users 表
+    auto connGuard = m_sqlPool.Borrow();
+    std::string escapedUser = connGuard->Escape(username->second);
+    std::string escapedEmail = connGuard->Escape(email->second);
+    std::string escapedPass = connGuard->Escape(password->second);
+
+    // 检查用户名是否已存在
+    ResultSet exists = connGuard->Query("SELECT id FROM users WHERE username='" + escapedUser + "' LIMIT 1");
+    if (exists.Ok() && !exists.Empty()) {
+        response.SetStatusCode(Status::K200K);
+        response.SetStatusMessage("OK");
+        SendHtmlResponse(conn, response, ResultPage("Registration failed", "Username \"" + username->second + "\" is already taken."),
+                         closeConnection);
         return true;
     }
 
+    long long affected = connGuard->Execute("INSERT INTO users (username, email, password) VALUES ('" + escapedUser + "', '" + escapedEmail + "', '" +
+                                            escapedPass + "')");
+    if (affected < 0) {
+        response.SetStatusCode(Status::K500internalServerError);
+        response.SetStatusMessage("Internal Server Error");
+        SendHtmlResponse(conn, response, ResultPage("Registration failed", "Database error: " + connGuard->LastError()), closeConnection);
+        return true;
+    }
+    // 注册后创建新用户目录存放用户文件
+    std::filesystem::path newUserRoot = std::filesystem::path(m_staticRoot) / username->second;
+    std::filesystem::create_directory(newUserRoot);
     response.SetStatusCode(Status::K200K);
     response.SetStatusMessage("OK");
-    SendHtmlResponse(conn, response, ResultPage("Registration saved", "The registration data was written to data/users.txt."), closeConnection);
+    SendHtmlResponse(conn, response, ResultPage("Registration saved", "Account \"" + username->second + "\" created successfully."), closeConnection);
     return true;
 }
 

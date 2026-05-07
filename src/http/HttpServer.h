@@ -6,6 +6,7 @@
 #include <functional>
 #include "EventLoopThreadPool.h"
 #include "HttpConnect.h"
+#include "SqlConnPool.h"
 
 class EventLoop;
 class Socket;
@@ -18,8 +19,7 @@ class HttpServer {
     std::unique_ptr<Acceptor> m_acceptor;
     std::unordered_map<int, std::shared_ptr<HttpConnect>> m_connections;
     std::unique_ptr<EventLoopThreadPool> m_subReactorsPool;
-    // std::vector<std::unique_ptr<EventLoop>> m_subReactors;
-    // std::unique_ptr<ThreadPool> m_threadPool;
+    MysqlPool& m_sqlPool;
     std::mutex m_connections_mtx;
 
     std::function<void(const std::shared_ptr<HttpConnect>&)> m_requestCallback;
@@ -30,7 +30,9 @@ class HttpServer {
   public:
     HttpServer(const char* ip, int port);
     ~HttpServer() = default;
-    void start();
+    void InitSqlPool(const std::string& host, int port, const std::string& user, const std::string& passwd, const std::string& db,
+                     size_t poolSize = 8);
+    void Start();
     void CloseConnection(const std::shared_ptr<HttpConnect>& conn);
     void CloseConnectionInLoop(const std::shared_ptr<HttpConnect>& conn);
     void CreateConnection(int sock_fd);
