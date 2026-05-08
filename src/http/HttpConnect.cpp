@@ -143,7 +143,16 @@ void HttpConnect::HandleClose() {
 }
 
 void HttpConnect::HandleRequest() {
-    ReadNonBlocking();
+    try {
+        ReadNonBlocking();
+    } catch (const std::exception& e) {
+        m_state = State::Failed;
+        m_request.Reset();
+        m_readBuffer->RetrieveAll();
+        HandleError(403, "Forbidden:The file you upload is too large!");
+        return;
+    }
+
     if (auto timer = m_timer.lock()) {
         timer->Update(HTTP_DEFAULT_TIMEOUT);
     }
@@ -223,7 +232,7 @@ void HttpConnect::ReadNonBlocking() {
         auto byte_read = read(sockfd, buf, READ_BUFFER);
         if (byte_read > 0) {
             // cout << "Get messages from " << sockfd << ":" << buf << '\n';
-            LOG_INFO << "Get messages from " << sockfd << ":" << buf << '\n';
+            LOG_INFO << "Get messages from " << sockfd << ":" << sizeof(buf) << 'bytes\n';
             m_readBuffer->Append(buf, byte_read);
         } else if (byte_read == -1 && errno == EINTR) {
             // 客户端正常中断
