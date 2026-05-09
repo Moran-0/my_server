@@ -14,6 +14,10 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(INCLUDE_DIRECTORIES ${PROJECT_SOURCE_DIR}/src/include)
 
+# 给可执行文件设置相对 RPATH，让它运行时从自身所在目录找库
+set(CMAKE_BUILD_RPATH "$ORIGIN/lib")
+set(CMAKE_INSTALL_RPATH "$ORIGIN/lib")
+
 find_program(CLANG_FORMAT_BIN NAMES clang-format)
 find_program(CLANG_TIDY_BIN NAMES clang-tidy)
 
