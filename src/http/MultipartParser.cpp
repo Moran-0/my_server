@@ -25,7 +25,7 @@ bool MultipartParser::Parse(const std::string& contentType, const std::string& b
             errorMsg = "Invalid multipart boundary line";
             return false;
         }
-        size_t partStart = pos + 2; // 跳过 \r\n
+        size_t partStart = boundaryPos + 2; // 跳过 \r\n
         size_t headerEnd = body.find("\r\n\r\n", partStart);
         if (headerEnd == std::string::npos) {
             errorMsg = "Invalid multipart part:missing header terminator";

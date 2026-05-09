@@ -9,6 +9,7 @@
 #include "HttpResponse.h"
 #include "HttpConfig.h"
 #include "Logging.h"
+#include "MultipartParser.h"
 
 #include <iostream>
 #include <fcntl.h>
@@ -400,6 +401,13 @@ std::string ContentListPage(const std::string& username, const std::string& curr
                       HtmlEscape(notice) + R"(</div>
         )";
     }
+    std::string uploadBlock = R"(
+      <form class="upload" method="post" action="/upload" enctype="multipart/form-data">
+        <input type="hidden" name="username" value=")" +
+                              HtmlEscape(username) + R"(">
+        <input type="hidden" name="directory" value=")" +
+                              HtmlEscape(currentDir) + R"(">
+        <input type="file" name="file" required><button type="submit">Upload</button></form>)";
 
     if (!currentDir.empty()) {
         const auto parent = ParentDirOf(currentDir);
@@ -555,6 +563,37 @@ std::string ContentListPage(const std::string& username, const std::string& curr
       color: var(--ok-text);
       font-weight: 700;
     }
+    .upload {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 120px;
+        gap: 12px;
+        padding: 16px 18px;
+        border-bottom: 1px solid var(--line);
+        background: #fbfcfe;
+    }
+    .upload input[type="file"] {
+        min-width: 0;
+        min-height: 42px;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel);
+        color: var(--text);
+        font: inherit;
+    }
+    .upload button {
+        min-height: 42px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #ffffff;
+        font: inherit;
+        font-weight: 800;
+        cursor: pointer;
+    }
+    .upload button:hover {
+        background: #1d4ed8;
+    }
     .toolbar {
       display: flex;
       justify-content: space-between;
@@ -675,6 +714,9 @@ std::string ContentListPage(const std::string& username, const std::string& curr
         grid-column: 2;
         text-align: left;
       }
+      .upload {
+        grid-template-columns: 1fr;
+    }
     }
   </style>
 </head>
@@ -691,6 +733,7 @@ std::string ContentListPage(const std::string& username, const std::string& curr
 
     <section class="panel">
 )" + noticeBlock +
+           uploadBlock +
            R"(
       <div class="toolbar">
         <span>Name</span>
@@ -956,10 +999,82 @@ bool HttpServer::HandlePostRequest(const std::shared_ptr<HttpConnect>& conn) {
     response.AddHeader("Server", "Moran's Web Server");
 
     const auto path = DecodeUrlPath(request.GetUrl());
-    if (path != "/login" && path != "/register" && path != "/download" && path != "/delete") {
+    if (path != "/login" && path != "/register" && path != "/download" && path != "/delete" && path != "/upload") {
         response.SetStatusCode(Status::K404NotFound);
         response.SetStatusMessage("Not Found");
         SendHtmlResponse(conn, response, ErrorBody(Status::K404NotFound, "Not Found"), closeConnection);
+        return true;
+    }
+    if (path == "/upload") {
+        auto contentType = request.GetHeader("Content-Type");
+        if (contentType.find("multipart/form-data") == std::string::npos) {
+            response.SetStatusCode(Status::K400BadRequest);
+            response.SetStatusMessage("Bad Request");
+            SendHtmlResponse(conn, response, ErrorBody(Status::K400BadRequest, "Bad Request"), closeConnection);
+            return true;
+        }
+        std::vector<MultipartPart> parts;
+        std::string errorMsg;
+        auto parseSuccess = MultipartParser::Parse(contentType, request.GetBody(), parts, errorMsg);
+        if (!parseSuccess) {
+            response.SetStatusCode(Status::K400BadRequest);
+            response.SetStatusMessage("Bad Request");
+            SendHtmlResponse(conn, response, ErrorBody(Status::K400BadRequest, errorMsg), closeConnection);
+            return true;
+        }
+        const MultipartPart* userNamePart = nullptr;
+        const MultipartPart* directoryPart = nullptr;
+        const MultipartPart* filePart = nullptr;
+        for (const auto& part : parts) {
+            if (part.name == "username") {
+                userNamePart = &part;
+            } else if (part.name == "directory") {
+                directoryPart = &part;
+            } else if (part.name == "file" && part.isFile()) {
+                filePart = &part;
+            }
+        }
+        if (userNamePart == nullptr || filePart == nullptr) {
+            response.SetStatusCode(Status::K400BadRequest);
+            response.SetStatusMessage("Bad Request");
+            SendHtmlResponse(conn, response, ErrorBody(Status::K400BadRequest, "Bad Request"), closeConnection);
+            return true;
+        }
+        const std::string username = userNamePart->content;
+        const std::string directory = directoryPart != nullptr ? directoryPart->content : "";
+        const std::string fileName = filePart->filename;
+        if (username.empty() || !IsSafePath(fileName)) {
+            response.SetStatusCode(Status::K400BadRequest);
+            response.SetStatusMessage("Bad Request");
+            SendHtmlResponse(conn, response, ErrorBody(Status::K400BadRequest, "Bad Request"), closeConnection);
+            return true;
+        }
+        std::filesystem::path uploadDir;
+        if (!ResolveUserPath(m_staticRoot, username, directory, uploadDir) || !std::filesystem::is_directory(uploadDir)) {
+            response.SetStatusCode(Status::K403Forbidden);
+            response.SetStatusMessage("Forbidden: Invalid path");
+            SendHtmlResponse(conn, response, ErrorBody(Status::K403Forbidden, "Forbidden: Invalid path"), closeConnection);
+            return true;
+        }
+        const auto targetPath = uploadDir / fileName;
+        std::ofstream out(targetPath, std::ios::out | std::ios::binary | std::ios::trunc);
+        if (!out) {
+            response.SetStatusCode(Status::K500internalServerError);
+            response.SetStatusMessage("Internal Server Error");
+            SendHtmlResponse(conn, response, ErrorBody(Status::K500internalServerError, "Internal Server Error"), closeConnection);
+            return true;
+        }
+        out.write(filePart->content.data(), static_cast<std::streamsize>(filePart->content.size()));
+        if (!out) {
+            response.SetStatusCode(Status::K500internalServerError);
+            response.SetStatusMessage("Internal Server Error");
+            SendHtmlResponse(conn, response, ErrorBody(Status::K500internalServerError, "Internal Server Error"), closeConnection);
+            return true;
+        }
+        response.SetStatusCode(Status::K200K);
+        response.SetStatusMessage("OK");
+        const auto files = LoadUserContent(m_staticRoot, username, directory);
+        SendHtmlResponse(conn, response, ContentListPage(username, directory, files), closeConnection);
         return true;
     }
 
