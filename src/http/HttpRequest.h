@@ -112,8 +112,4 @@ class HttpRequest {
     void ParseRequestLine(const char c);
     void ParseHeader(const char c);
     void ParseBody(const char c);
-    // todo
-    void ParsePath();
-    void ParsePost();
-    void ParseFromUrlencoded();
 };

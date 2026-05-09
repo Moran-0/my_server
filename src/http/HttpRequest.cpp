@@ -263,8 +263,8 @@ void HttpRequest::ParseHeader(const char c) {
 
 void HttpRequest::ParseBody(const char c) {
     m_body.push_back(c);
+    m_end = m_curPos + 1;
     if (m_body.size() == static_cast<size_t>(m_contentLength)) {
         m_parseState = HttpParseState::FINISH;
-        m_end = m_curPos + 1;
     }
 }

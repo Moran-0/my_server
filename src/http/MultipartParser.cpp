@@ -1,5 +1,6 @@
 #include "MultipartParser.h"
 #include <algorithm>
+#include <cctype>
 bool MultipartParser::Parse(const std::string& contentType, const std::string& body, std::vector<MultipartPart>& parts, std::string& errorMsg) {
     parts.clear();
     errorMsg.clear();

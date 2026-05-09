@@ -98,6 +98,15 @@ bool IsSafePath(const std::string& value) {
     return true;
 }
 
+std::string SafeFileName(const std::string& filename) {
+    const auto name = std::filesystem::path(filename).filename().string();
+    if (name.empty() || name == "." || name == ".." || name.find('/') != std::string::npos || name.find('\\') != std::string::npos ||
+        name.find('\0') != std::string::npos) {
+        return "";
+    }
+    return name;
+}
+
 bool ResolveUserPath(const std::string& staticRoot, const std::string& username, const std::string& path, std::filesystem::path& resolvePath) {
     if (username.empty() || username.find("..") != std::string::npos || username.find('/') != std::string::npos ||
         username.find('\\') != std::string::npos || !IsSafePath(path)) {
@@ -760,6 +769,15 @@ void SendHtmlResponse(const std::shared_ptr<HttpConnect>& conn, HttpResponse& re
 
 void SendDownloadResponse(const std::shared_ptr<HttpConnect>& conn, HttpResponse& response, const std::filesystem::path& filePath,
                           const std::string& filename, bool closeConnection) {
+    auto fileSize = std::filesystem::file_size(filePath);
+    if (fileSize > kMaxStaticFileSize) {
+        response.SetStatusCode(Status::K200K);
+        response.SetStatusMessage("OK");
+        response.SetContentType(GetMimeType(filePath.extension().string()));
+        response.AddHeader("Content-Disposition", "attachment; filename=\"" + RecordValue(filename) + "\"");
+        conn->SendFile(response.message(static_cast<size_t>(fileSize)), filePath, fileSize);
+        return;
+    }
     std::ifstream file(filePath, std::ios::in | std::ios::binary);
     if (!file) {
         response.SetStatusCode(Status::K403Forbidden);
@@ -1042,8 +1060,8 @@ bool HttpServer::HandlePostRequest(const std::shared_ptr<HttpConnect>& conn) {
         }
         const std::string username = userNamePart->content;
         const std::string directory = directoryPart != nullptr ? directoryPart->content : "";
-        const std::string fileName = filePart->filename;
-        if (username.empty() || !IsSafePath(fileName)) {
+        const std::string fileName = SafeFileName(filePart->filename);
+        if (username.empty() || fileName.empty()) {
             response.SetStatusCode(Status::K400BadRequest);
             response.SetStatusMessage("Bad Request");
             SendHtmlResponse(conn, response, ErrorBody(Status::K400BadRequest, "Bad Request"), closeConnection);
@@ -1257,14 +1275,13 @@ bool HttpServer::ServeStaticFile(const std::shared_ptr<HttpConnect>& conn) {
 
     const auto fileSize = std::filesystem::file_size(filePath, ec);
     if (ec || fileSize > kMaxStaticFileSize) {
-        response.SetStatusCode(HttpResponse::K413PayloadTooLarge);
-        response.SetStatusMessage("Payload Too Large");
-        response.SetContentType("text/html; charset=utf-8");
-        response.SetBody(ErrorBody(Status::K413PayloadTooLarge, "Payload Too Large"));
+        response.SetStatusCode(HttpResponse::K200K);
+        response.SetStatusMessage("OK");
+        response.SetContentType(GetMimeType(filePath.extension().string()));
         if (closeConnection) {
             conn->SetCloseAfterWrite(true);
         }
-        conn->Send(response.message());
+        conn->SendFile(response.message(static_cast<size_t>(fileSize)), filePath, static_cast<off_t>(fileSize));
         return true;
     }
 

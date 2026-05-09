@@ -1,8 +1,56 @@
 #include <iostream>
 #include <string>
+#include <cassert>
 #include "HttpRequest.h"
+#include "MultipartParser.h"
 
 int main() {
+    const std::string boundary = "----WebKitFormBoundaryTest";
+    const std::string multipartBody = "--" + boundary + "\r\n"
+                                      "Content-Disposition: form-data; name=\"username\"\r\n"
+                                      "\r\n"
+                                      "moran\r\n"
+                                      "--" + boundary + "\r\n"
+                                      "Content-Disposition: form-data; name=\"directory\"\r\n"
+                                      "\r\n"
+                                      "docs\r\n"
+                                      "--" + boundary + "\r\n"
+                                      "Content-Disposition: form-data; name=\"file\"; filename=\"hello.txt\"\r\n"
+                                      "Content-Type: text/plain\r\n"
+                                      "\r\n"
+                                      "hello file\r\n"
+                                      "--" + boundary + "--\r\n";
+    const std::string multipartHeader = "POST /upload HTTP/1.1\r\n"
+                                        "Host: 127.0.0.1:8888\r\n"
+                                        "Content-Type: multipart/form-data; boundary=" +
+                                        boundary + "\r\n"
+                                                   "Content-Length: " +
+                                        std::to_string(multipartBody.size()) +
+                                        "\r\n"
+                                        "Connection: close\r\n"
+                                        "\r\n";
+    const std::string chunk1 = multipartHeader + multipartBody.substr(0, 91);
+    const std::string chunk2 = multipartBody.substr(91);
+
+    HttpRequest multipartRequest;
+    int consumed = multipartRequest.Parse(chunk1);
+    assert(consumed > 0);
+    assert(!multipartRequest.IsFinish());
+
+    std::string unread = chunk1.substr(static_cast<size_t>(consumed)) + chunk2;
+    consumed = multipartRequest.Parse(unread);
+    assert(consumed == static_cast<int>(unread.size()));
+    assert(multipartRequest.IsFinish());
+    assert(multipartRequest.GetBody() == multipartBody);
+
+    std::vector<MultipartPart> parts;
+    std::string errorMsg;
+    assert(MultipartParser::Parse(multipartRequest.GetHeader("Content-Type"), multipartRequest.GetBody(), parts, errorMsg));
+    assert(parts.size() == 3);
+    assert(parts[0].name == "username" && parts[0].content == "moran");
+    assert(parts[1].name == "directory" && parts[1].content == "docs");
+    assert(parts[2].name == "file" && parts[2].filename == "hello.txt" && parts[2].content == "hello file");
+
     std::string req_part1 = "GET /hello?a=2 HTTP/1.1\r\n"
                             "Host: 127.0.0.1:1234\r\n"
                             "Connection: keep-alive\r\n"

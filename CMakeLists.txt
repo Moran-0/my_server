@@ -37,6 +37,9 @@ target_link_libraries(server PRIVATE pine)
 add_executable(client client.cpp)
 target_link_libraries(client PRIVATE pine)
 
+add_executable(Moran-Server MoranWebServer.cpp)
+target_link_libraries(Moran-Server PRIVATE pine)
+
 add_subdirectory(test)
 
 if(CLANG_FORMAT_BIN)

@@ -26,7 +26,7 @@ class HttpResponse {
 
     void SetBody(std::string body);
 
-    std::string message(); // 将信息加入到buffer中。
+    std::string message(size_t size = 0); // 将信息加入到buffer中。
 
     bool IsCloseConnection() const;
 

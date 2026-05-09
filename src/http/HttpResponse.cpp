@@ -31,11 +31,15 @@ bool HttpResponse::IsCloseConnection() const {
     return m_closeConnection;
 }
 
-std::string HttpResponse::message() {
+std::string HttpResponse::message(size_t size) {
     std::string message;
     message += ("HTTP/1.1 " + std::to_string(m_statusCode) + " " + m_statusMessage + "\r\n");
     if (m_headers.find("Content-Length") == m_headers.end()) {
-        message += ("Content-Length: " + std::to_string(m_body.size()) + "\r\n");
+        if (size != 0) {
+            message += ("Content-Length: " + std::to_string(size) + "\r\n");
+        } else {
+            message += ("Content-Length: " + std::to_string(m_body.size()) + "\r\n");
+        }
     }
     if (m_closeConnection) {
         message += ("Connection: close\r\n");

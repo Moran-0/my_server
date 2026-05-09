@@ -5,6 +5,8 @@
 #include "Logging.h"
 
 #include <sys/socket.h>
+#include <sys/sendfile.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <cstring>
@@ -98,7 +100,8 @@ std::string ErrorPage(int errorNum, const std::string& errorMsg) {
 }
 } // namespace
 
-HttpConnect::HttpConnect(EventLoop* _loop, int sock_fd) : m_loop(_loop), m_connectedFd(sock_fd), m_closeAfterWrite(false) {
+HttpConnect::HttpConnect(EventLoop* _loop, int sock_fd)
+    : m_loop(_loop), m_connectedFd(sock_fd), m_closeAfterWrite(false), m_fileFd(-1), m_fileOffset(0), m_fileRemain(0) {
     fcntl(m_connectedFd, F_SETFL, fcntl(m_connectedFd, F_GETFL) | O_NONBLOCK); // 设置非阻塞IO
     m_channel = std::make_unique<Channel>(m_loop, m_connectedFd);
     m_channel->UseET();
@@ -223,6 +226,19 @@ void HttpConnect::Send(const char* response) {
     Send(response, static_cast<int>(strlen(response)));
 }
 
+void HttpConnect::SendFile(const std::string& header, const std::filesystem::path& filePath, off_t fileSize) {
+    Send(header);
+    m_fileFd = ::open(filePath.c_str(), O_RDONLY);
+    if (m_fileFd < 0) {
+        LOG_ERROR << "Failed to open file: " << filePath << '\n';
+        HandleError(404, "Not Found");
+        return;
+    }
+    m_fileOffset = 0;
+    m_fileRemain = fileSize;
+    WriteNonBlocking();
+}
+
 void HttpConnect::ReadNonBlocking() {
     int sockfd = m_connectedFd;
     char buf[READ_BUFFER]{0};
@@ -232,7 +248,7 @@ void HttpConnect::ReadNonBlocking() {
         auto byte_read = read(sockfd, buf, READ_BUFFER);
         if (byte_read > 0) {
             // cout << "Get messages from " << sockfd << ":" << buf << '\n';
-            LOG_INFO << "Get messages from " << sockfd << ":" << sizeof(buf) << 'bytes\n';
+            LOG_INFO << "Get messages from " << sockfd << ":" << sizeof(buf) << "bytes\n";
             m_readBuffer->Append(buf, byte_read);
         } else if (byte_read == -1 && errno == EINTR) {
             // 客户端正常中断
@@ -272,6 +288,31 @@ void HttpConnect::WriteNonBlocking() {
         LOG_ERROR << "Error on write!";
         HandleClose(); // 写操作遇到未知错误，关闭连接
         return;
+    }
+    // 发送大文件时，不走缓存区，直接发送
+    while (m_fileFd >= 0 && m_fileRemain > 0) {
+        ssize_t sent = ::sendfile(m_connectedFd, m_fileFd, &m_fileOffset, m_fileRemain);
+        if (sent >= 0) {
+            m_fileRemain -= sent;
+            continue;
+        }
+        if (sent == -1 && (errno == EINTR)) {
+            continue; // 正常中断
+        }
+        // 写缓冲区已满，注册写事件，等待可写
+        if (sent == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+            m_channel->EnableWrite();
+            return;
+        }
+        ::close(m_fileFd);
+        m_fileFd = -1;
+        HandleClose();
+        return;
+    }
+
+    if (m_fileFd >= 0 && m_fileRemain == 0) {
+        ::close(m_fileFd);
+        m_fileFd = -1;
     }
     // 写完后关闭，否则 socket 通常一直可写，会导致 epoll 持续唤醒，CPU 空转
     m_channel->DisableWrite();

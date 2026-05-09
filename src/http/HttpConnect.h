@@ -1,6 +1,8 @@
 #pragma once
 #include <functional>
 #include <memory>
+#include <filesystem>
+
 #include "Buffer.h"
 #include "HttpRequest.h"
 #include "Channel.h"
@@ -26,6 +28,10 @@ class HttpConnect : public NoCopy, public NoMove, public std::enable_shared_from
     bool m_closeAfterWrite;
     HttpRequest m_request;
     std::weak_ptr<Timer> m_timer; // 连接对应的定时器，定时器过期时关闭连接
+    // sendfile使用
+    int m_fileFd;
+    off_t m_fileOffset;
+    off_t m_fileRemain;
 
   public:
     HttpConnect(EventLoop* _loop, int sock_fd);
@@ -76,6 +82,7 @@ class HttpConnect : public NoCopy, public NoMove, public std::enable_shared_from
     void SetCloseAfterWrite(bool closeAfterWrite) {
         m_closeAfterWrite = closeAfterWrite;
     }
+    void SendFile(const std::string& header, const std::filesystem::path& filePath, off_t fileSize);
 
   private:
     void ReadNonBlocking();
